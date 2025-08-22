@@ -128,7 +128,7 @@ This project is open source and available under the MIT License.
 
 ## Contact
 
-For questions or collaboration inquiries, please reach out via [your email] or visit the GitHub repository.
+For questions or collaboration inquiries, please reach out via vardhanm0257@gmail.com or jaladisravya7@gmail.com or visit the GitHub repository.
 
 ---
 
