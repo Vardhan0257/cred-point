@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+    <h2>Edit Activity</h2>
+    {% if form.errors %}
+<div class="alert alert-danger">
+    <ul>
+    {% for field, errors in form.errors.items() %}
+        {% for error in errors %}
+            <li>{{ field }}: {{ error }}</li>
+        {% endfor %}
+    {% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+    <form method="POST" enctype="multipart/form-data">
+        {{ form.hidden_tag() }}
+
+        <div class="form-group">
+            {{ form.title.label }} {{ form.title(class="form-control") }}
+        </div>
+        <div class="form-group">
+            {{ form.provider.label }} {{ form.provider(class="form-control") }}
+        </div>
+        <div class="form-group">
+            {{ form.cpe_points.label }} {{ form.cpe_points(class="form-control") }}
+        </div>
+        <div class="form-group">
+            {{ form.activity_type.label }} {{ form.activity_type(class="form-control") }}
+        </div>
+        <div class="form-group">
+            {{ form.description.label }} {{ form.description(class="form-control") }}
+        </div>
+        <div class="form-group">
+            {{ form.activity_date.label }} {{ form.activity_date(class="form-control") }}
+        </div>
+        <div class="form-group">
+            {{ form.certification_id.label }} {{ form.certification_id(class="form-control") }}
+        </div>
+        <div class="form-group">
+            {{ form.proof_file.label }} {{ form.proof_file(class="form-control-file") }}
+            {% if activity.proof_file %}
+                <p>Current proof: <a href="{{ url_for('static', filename='uploads/' ~ activity.proof_file) }}" target="_blank">View File</a></p>
+            {% endif %}
+        </div>
+
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+        <a href="{{ url_for('routes.list_activities') }}" class="btn btn-secondary">Cancel</a>
+    </form>
+</div>
+{% endblock %}

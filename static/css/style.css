@@ -1,0 +1,263 @@
+/* Custom styles for CPE Management Platform - Optimized for performance */
+html, body {
+    height: 100%;
+}
+:root {
+    --primary-color: #0d6efd;
+    --success-color: #198754;
+    --warning-color: #ffc107;
+    --danger-color: #dc3545;
+    --info-color: #0dcaf0;
+}
+
+/* Critical performance optimizations */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-display: swap; /* Improve font loading */
+    display: flex;
+    flex-direction: column;
+}
+main {
+    flex: 1;
+}
+
+/* Reduce layout shifts */
+img, iframe, video {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Progress bars with smooth animations */
+.progress {
+    border-radius: 50px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    transition: width 0.6s ease;
+}
+
+/* Card hover effects */
+.card {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Status badges styling */
+.badge {
+    font-size: 0.75em;
+    font-weight: 500;
+}
+
+/* File upload area styling */
+.form-control[type="file"] {
+    padding: 0.375rem 0.75rem;
+}
+
+/* Table improvements */
+.table-hover tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.075);
+}
+
+/* Custom button styles */
+.btn {
+    border-radius: 0.375rem;
+    font-weight: 500;
+    transition: all 0.15s ease-in-out;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+}
+
+/* Navbar styling */
+.navbar-brand {
+    font-weight: 600;
+    font-size: 1.25rem;
+}
+
+/* Dashboard stats cards */
+.stats-card {
+    border-left: 4px solid var(--primary-color);
+}
+
+.stats-card.success {
+    border-left-color: var(--success-color);
+}
+
+.stats-card.warning {
+    border-left-color: var(--warning-color);
+}
+
+.stats-card.info {
+    border-left-color: var(--info-color);
+}
+
+/* Form styling improvements */
+.form-label {
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.form-text {
+    font-size: 0.875rem;
+}
+
+/* Alert styling */
+.alert {
+    border: none;
+    border-radius: 0.5rem;
+}
+
+/* Footer styling */
+footer {
+    margin-top: auto;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+    
+    .btn-group-vertical .btn {
+        margin-bottom: 0.25rem;
+    }
+    
+    .card-body {
+        padding: 1rem;
+    }
+}
+
+/* Loading animation for buttons */
+.btn-loading {
+    position: relative;
+    pointer-events: none;
+}
+
+.btn-loading::after {
+    content: "";
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    top: 50%;
+    left: 50%;
+    margin-left: -8px;
+    margin-top: -8px;
+    border: 2px solid transparent;
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: button-loading-spinner 1s ease infinite;
+}
+
+@keyframes button-loading-spinner {
+    from { transform: rotate(0turn); }
+    to { transform: rotate(1turn); }
+}
+
+/* Custom scrollbar for webkit browsers */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+/* Progress ring animation */
+@keyframes progress-ring {
+    0% { stroke-dasharray: 0 100; }
+}
+
+.progress-ring {
+    animation: progress-ring 1s ease-out;
+}
+
+/* Certification status colors */
+.status-complete { color: var(--success-color); }
+.status-on-track { color: var(--info-color); }
+.status-behind { color: var(--warning-color); }
+.status-critical { color: var(--danger-color); }
+
+/* File type icons */
+.file-icon::before {
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+}
+
+.file-pdf::before { content: "\f1c1"; color: #dc3545; }
+.file-image::before { content: "\f1c5"; color: #198754; }
+.file-default::before { content: "\f15b"; color: #6c757d; }
+
+/* Smooth page transitions */
+.page-content {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Empty state styling */
+.empty-state {
+    padding: 3rem 1rem;
+    text-align: center;
+}
+
+.empty-state i {
+    opacity: 0.5;
+    margin-bottom: 1rem;
+}
+
+/* Tooltip improvements */
+.tooltip {
+    font-size: 0.875rem;
+}
+
+/* Custom form validation */
+.was-validated .form-control:valid,
+.form-control.is-valid {
+    border-color: var(--success-color);
+    background-image: none;
+}
+
+.was-validated .form-control:invalid,
+.form-control.is-invalid {
+    border-color: var(--danger-color);
+    background-image: none;
+}
+
+/* Print styles */
+@media print {
+    .navbar,
+    .btn,
+    .card-footer,
+    .pagination {
+        display: none !important;
+    }
+    
+    .card {
+        border: 1px solid #dee2e6 !important;
+    }
+    
+    .table {
+        font-size: 0.875rem;
+    }
+}

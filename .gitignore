@@ -1,0 +1,7 @@
+serviceAccountKey.json
+**/__pycache__/
+.local/
+.venv/
+services/__pycache__/
+static/uploads/
+venv/

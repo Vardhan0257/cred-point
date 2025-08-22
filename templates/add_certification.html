@@ -1,0 +1,116 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ 'Edit' if certification else 'Add' }} Certification - CPE Management Platform{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-6">
+        <div class="card border-0 shadow">
+            <div class="card-header">
+                <h3 class="card-title mb-0">
+                    <i class="fas fa-{{ 'edit' if certification else 'plus' }} text-primary me-2"></i>
+                    {{ 'Edit' if certification else 'Add New' }} Certification
+                </h3>
+            </div>
+            
+            <div class="card-body p-4">
+                <form method="POST">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="mb-3">
+                        {{ form.name.label(class="form-label") }}
+                        {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else ""), placeholder="e.g., CISSP, CEH, Security+") }}
+                        {% if form.name.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.name.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">Enter the full name of your certification</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.authority.label(class="form-label") }}
+                        {{ form.authority(class="form-select" + (" is-invalid" if form.authority.errors else "")) }}
+                        {% if form.authority.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.authority.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">Select the certification authority</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        {{ form.required_cpes.label(class="form-label") }}
+                        <div class="input-group">
+                            {{ form.required_cpes(class="form-control" + (" is-invalid" if form.required_cpes.errors else ""), placeholder="40") }}
+                            <span class="input-group-text">CPEs</span>
+                        </div>
+                        {% if form.required_cpes.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.required_cpes.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">Total CPEs needed for renewal period</div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        {{ form.renewal_date.label(class="form-label") }}
+                        {{ form.renewal_date(class="form-control" + (" is-invalid" if form.renewal_date.errors else "")) }}
+                        {% if form.renewal_date.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.renewal_date.errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        <div class="form-text">When does this certification need to be renewed?</div>
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('routes.list_certificates') }}" class="btn btn-secondary me-md-2">
+                            <i class="fas fa-times me-1"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary" data-original="{{ 'Update' if certification else 'Add' }} Certification">
+                            <i class="fas fa-{{ 'save' if certification else 'plus' }} me-1"></i>
+                            {{ 'Update' if certification else 'Add' }} Certification
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Information Card -->
+        <div class="card border-0 mt-4">
+            <div class="card-body">
+                <h6 class="card-title">
+                    <i class="fas fa-info-circle text-info me-2"></i>Common CPE Requirements
+                </h6>
+                <div class="row text-center">
+                    <div class="col-6 col-md-3 mb-2">
+                        <strong>ISC²</strong><br>
+                        <small class="text-muted">40 CPEs / 3 years</small>
+                    </div>
+                    <div class="col-6 col-md-3 mb-2">
+                        <strong>EC-Council</strong><br>
+                        <small class="text-muted">120 Credits / 3 years</small>
+                    </div>
+                    <div class="col-6 col-md-3 mb-2">
+                        <strong>CompTIA</strong><br>
+                        <small class="text-muted">50 CEUs / 3 years</small>
+                    </div>
+                    <div class="col-6 col-md-3 mb-2">
+                        <strong>OffSec</strong><br>
+                        <small class="text-muted">Varies by cert</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

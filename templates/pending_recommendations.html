@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Pending Recommendations</h2>
+{% for rec in recommendations %}
+    <div>
+        <strong>{{ rec.title }}</strong> ({{ rec.source }}) - Expires {{ rec.expires_at }}
+        <form method="POST" action="{{ url_for('approve_recommendation', rec_id=rec.id) }}">
+            <button type="submit">Approve</button>
+        </form>
+        <form method="POST" action="{{ url_for('delete_recommendation', rec_id=rec.id) }}">
+            <button type="submit">Delete</button>
+        </form>
+    </div>
+{% else %}
+    <p>No pending recommendations.</p>
+{% endfor %}
+{% endblock %}

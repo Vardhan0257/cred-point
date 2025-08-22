@@ -1,0 +1,231 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - CPE Management Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-tachometer-alt text-primary me-2"></i>Dashboard</h1>
+    <div class="d-flex align-items-center">
+        <!-- Notifications/Reminders Dropdown -->
+        <div class="dropdown me-3">
+            <button class="btn btn-warning position-relative dropdown-toggle" type="button" id="notifDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="fas fa-bell"></i>
+                {% if reminders %}
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                    {{ reminders|length }}
+                </span>
+                {% endif %}
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="notifDropdown" style="max-height:300px; overflow-y:auto;">
+                {% if reminders %}
+                    {% for reminder in reminders %}
+                        <li>
+                            <div class="dropdown-item d-flex align-items-start">
+                                <i class="fas fa-{{ 'calendar-times' if reminder.type == 'renewal' else 'chart-line' }} me-2 text-{{ 'danger' if reminder.type == 'renewal' else 'warning' }}"></i>
+                                <span>{{ reminder.message }}</span>
+                            </div>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                    {% endfor %}
+                {% else %}
+                    <li><span class="dropdown-item text-muted">No reminders or notifications</span></li>
+                {% endif %}
+            </ul>
+        </div>
+
+        <a href="{{ url_for('routes.add_certification') }}" class="btn btn-primary me-2">
+            <i class="fas fa-plus me-1"></i>Add Certification
+        </a>
+        <a href="{{ url_for('routes.add_activity') }}" class="btn btn-success">
+            <i class="fas fa-plus me-1"></i>Log Activity
+        </a>
+    </div>
+</div>
+
+<!-- Temporary Popup Notifications -->
+{% if reminders %}
+<div id="notifPopup" class="position-fixed top-0 end-0 p-3" style="z-index: 1080;">
+    <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header bg-warning text-dark">
+            <i class="fas fa-bell me-2"></i>
+            <strong class="me-auto">Reminders & Notifications</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+        <div class="toast-body">
+            {% for reminder in reminders %}
+                <div class="mb-2">
+                    <i class="fas fa-{{ 'calendar-times' if reminder.type == 'renewal' else 'chart-line' }} text-{{ 'danger' if reminder.type == 'renewal' else 'warning' }} me-1"></i>
+                    {{ reminder.message }}
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Statistics Cards -->
+<div class="row g-4 mb-5">
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center">
+                <div class="mb-2">
+                    <i class="fas fa-certificate fa-2x text-primary"></i>
+                </div>
+                <h3 class="card-title mb-1">{{ total_certifications }}</h3>
+                <p class="card-text text-muted">Certifications</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center">
+                <div class="mb-2">
+                    <i class="fas fa-list fa-2x text-success"></i>
+                </div>
+                <h3 class="card-title mb-1">{{ total_activities }}</h3>
+                <p class="card-text text-muted">Total Activities</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center">
+                <div class="mb-2">
+                    <i class="fas fa-clock fa-2x text-info"></i>
+                </div>
+                <h3 class="card-title mb-1">{{ recent_activities|length }}</h3>
+                <p class="card-text text-muted">Latest Activities</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 col-lg-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body text-center">
+                <div class="mb-2">
+                    <i class="fas fa-exclamation-triangle fa-2x text-warning"></i>
+                </div>
+                <h3 class="card-title mb-1">{{ reminders|length }}</h3>
+                <p class="card-text text-muted">Reminders</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Certifications Overview -->
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-certificate me-2"></i>Certification Progress
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if certifications %}
+                    {% for cert in certifications %}
+                        <div class="mb-4">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div>
+                                    <h6 class="mb-1">{{ cert.name }}</h6>
+                                    <small class="text-muted">{{ cert.authority }}</small>
+                                </div>
+                                <div class="text-end">
+                                    <span class="badge bg-{{ 'success' if cert.status == 'complete' else 'warning' if cert.status == 'on-track' else 'info' if cert.status == 'behind' else 'danger' }}">
+                                        {{ cert.status|capitalize }}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="progress mb-2" style="height: 8px;">
+                                <div class="progress-bar bg-{{ 'success' if cert.status == 'complete' else 'warning' if cert.status == 'on-track' else 'info' if cert.status == 'behind' else 'danger' }}" 
+                                     role="progressbar" 
+                                     style="width: {{ cert.progress_percentage|float }}%">
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    {{ cert.earned_cpes }}/{{ cert.required_cpes }} CPEs
+                                    ({{ "%.1f"|format(cert.progress_percentage|float) }}%)
+                                </small>
+                                <div>
+                                    <a href="{{ url_for('routes.export_certification', cert_id=cert.id, format='pdf') }}" 
+                                       class="btn btn-sm btn-outline-primary me-1" title="Export PDF">
+                                        <i class="fas fa-file-pdf"></i>
+                                    </a>
+                                    <a href="{{ url_for('routes.export_certification', cert_id=cert.id, format='csv') }}" 
+                                       class="btn btn-sm btn-outline-success" title="Export CSV">
+                                        <i class="fas fa-file-csv"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-certificate fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No certifications added yet</h5>
+                        <p class="text-muted mb-3">Start by adding your first certification to track CPE progress</p>
+                        <a href="{{ url_for('routes.add_certification') }}" class="btn btn-primary">
+                            <i class="fas fa-plus me-1"></i>Add First Certification
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card border-0 shadow-sm">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-history me-2"></i>Recent Activities
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if recent_activities %}
+                    {% for activity in recent_activities %}
+                        <div class="mb-3 pb-3 border-bottom">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="mb-1">{{ activity.activity_type or activity.title }}</h6>
+                                    <p class="mb-1 small">{{ (activity.description|default(''))[:60] }}{% if (activity.description|default(''))|length > 60 %}...{% endif %}</p>
+                                    <small class="text-muted">
+                                        {{ activity.formatted_date }} • 
+                                        {{ activity.cpe_points }} CPEs
+                                    </small>
+                                </div>
+                                <span class="badge bg-secondary">{{ activity.certification_authority or 'Unknown' }}</span>
+                            </div>
+                        </div>
+                    {% endfor %}
+
+                    <div class="text-center">
+                        <a href="{{ url_for('routes.list_activities') }}" class="btn btn-sm btn-outline-primary">
+                            View All Activities <i class="fas fa-arrow-right ms-1"></i>
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-list fa-2x text-muted mb-3"></i>
+                        <p class="text-muted mb-3">No activities logged yet</p>
+                        <a href="{{ url_for('routes.add_activity') }}" class="btn btn-sm btn-success">
+                            <i class="fas fa-plus me-1"></i>Log First Activity
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Auto-hide popup after 5 seconds
+    setTimeout(() => {
+        const popup = document.getElementById('notifPopup');
+        if (popup) {
+            popup.style.display = 'none';
+        }
+    }, 5000);
+</script>
+{% endblock %}

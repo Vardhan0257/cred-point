@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block title %}Newsletter - CPE Management Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-newspaper text-primary me-2"></i>Community Newsletter</h1>
+    <a href="{{ url_for('routes.my_newsletter') }}" class="btn btn-primary">
+        <i class="fas fa-user me-1"></i>My Events
+    </a>
+</div>
+
+{% if events %}
+    <div class="row g-4">
+        {% for event in events %}
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header">
+                        <h5 class="card-title mb-1">{{ event.title }}</h5>
+                        {% if event.date_display %}
+                            <span class="badge bg-info">
+                                <i class="fas fa-calendar-alt me-1"></i>{{ event.date_display }}
+                            </span>
+                        {% endif %}
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-2">{{ event.description }}</p>
+                        {% if event.link %}
+                            <a href="{{ event.link }}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                <i class="fas fa-link me-1"></i>Event Link
+                            </a>
+                        {% endif %}
+                    </div>
+                    <div class="card-footer bg-transparent">
+                        <small class="text-muted">
+                            Posted by {{ event.created_by_name or "Unknown" }} on {{ event.created_at_display }}
+                        </small>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="text-center py-5">
+        <i class="fas fa-newspaper fa-4x text-muted mb-4"></i>
+        <h3 class="text-muted mb-3">No Newsletter Events Yet</h3>
+    </div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Edit Recommendation{% endblock %}
+
+{% block content %}
+<h2>Edit Recommendation</h2>
+<form method="POST">
+    {{ form.hidden_tag() }}
+
+    <div class="mb-3">
+        {{ form.title.label(class="form-label") }}
+        {{ form.title(class="form-control") }}
+        {% for error in form.title.errors %}
+            <div class="text-danger small">{{ error }}</div>
+        {% endfor %}
+    </div>
+
+    <div class="mb-3">
+        {{ form.description.label(class="form-label") }}
+        {{ form.description(class="form-control", rows="4") }}
+        {% for error in form.description.errors %}
+            <div class="text-danger small">{{ error }}</div>
+        {% endfor %}
+    </div>
+
+    <div class="mb-3">
+        {{ form.url.label(class="form-label") }}
+        {{ form.url(class="form-control") }}
+        {% for error in form.url.errors %}
+            <div class="text-danger small">{{ error }}</div>
+        {% endfor %}
+    </div>
+
+    <div class="mb-3">
+        {{ form.expires_at.label(class="form-label") }}
+        {{ form.expires_at(class="form-control") }}
+        {% for error in form.expires_at.errors %}
+            <div class="text-danger small">{{ error }}</div>
+        {% endfor %}
+    </div>
+
+    <div class="d-flex justify-content-between mt-4">
+        <a href="{{ url_for('routes.my_recommendations') }}" class="btn btn-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+    </div>
+</form>
+{% endblock %}

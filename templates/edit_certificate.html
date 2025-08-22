@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Edit Certification{% endblock %}
+{% block content %}
+<h2>Edit Certification</h2>
+<form method="POST">
+    <div class="mb-3">
+        <label class="form-label">Certification Name</label>
+        <input type="text" name="name" class="form-control" value="{{ certification.name }}" required>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Authority</label>
+        <input type="text" name="authority" class="form-control" value="{{ certification.authority }}" required>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Required CPEs</label>
+        <input type="number" name="required_cpes" class="form-control" value="{{ certification.required_cpes }}" required>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Renewal Date</label>
+        <input type="date" name="renewal_date" class="form-control" value="{{ certification.renewal_date|default('', true) }}">
+    </div>
+    <button type="submit" class="btn btn-primary">Save Changes</button>
+    <a href="{{ url_for('routes.list_certificates') }}" class="btn btn-secondary">Cancel</a>
+</form>
+{% endblock %}

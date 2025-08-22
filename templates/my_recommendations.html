@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+
+{% block title %}My Recommendations - CPE Management Platform{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-lightbulb text-warning me-2"></i>My Recommendations</h2>
+    <a href="{{ url_for('routes.add_recommendation') }}" class="btn btn-primary">
+        <i class="fas fa-plus me-1"></i> Add Recommendation
+    </a>
+</div>
+
+{% if recommendations %}
+    <div class="row g-3">
+        {% for rec in recommendations %}
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h6 class="card-title">{{ rec.title }}</h6>
+                        <p class="card-text small">{{ rec.description }}</p>
+                        <div class="mb-2">
+                            <small class="text-muted"><strong>Source:</strong> {{ rec.source }}</small><br>
+                            <small class="text-muted"><strong>Type:</strong> {{ rec.type }}</small><br>
+                            <small class="text-muted"><strong>Expires:</strong> 
+                                {% if rec.expires_at %}
+                                    {{ rec.expires_at.strftime('%B %d, %Y') }}
+                                {% else %}
+                                    Not set
+                                {% endif %}
+                            </small><br>
+                            <small class="text-muted"><strong>Status:</strong> 
+                                {% if rec.approved %}
+                                    <span class="badge bg-success">Approved</span>
+                                {% else %}
+                                    <span class="badge bg-warning">Pending</span>
+                                {% endif %}
+                            </small>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <form method="POST" action="{{ url_for('routes.delete_own_recommendation', rec_id=rec.id) }}" style="display:inline;">
+                                <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this recommendation?')">
+                                    Delete
+                                </button>
+                            </form>
+                            <a href="{{ url_for('routes.edit_recommendation', rec_id=rec.id) }}" class="btn btn-sm btn-outline-secondary">
+                                Edit
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <p class="text-muted">You haven't added any recommendations yet.</p>
+{% endif %}
+{% endblock %}

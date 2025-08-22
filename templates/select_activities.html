@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}Select Activities - {{ cert.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Select Activities for {{ cert.name }} Export</h2>
+    <form method="POST">
+        <div class="list-group mb-3">
+            {% for activity in activities %}
+                <label class="list-group-item">
+                    <input type="checkbox" name="activity_ids" value="{{ activity.id }}" class="form-check-input me-2">
+                    {{ activity.title }} - {{ activity.formatted_date }} ({{ activity.cpe_points or activity.hours }} CPEs)
+                </label>
+            {% endfor %}
+        </div>
+        <button type="submit" class="btn btn-primary">Export Selected as PDF</button>
+    </form>
+</div>
+{% endblock %}
