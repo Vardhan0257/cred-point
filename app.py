@@ -1,10 +1,15 @@
 from flask import Flask, request, jsonify, g, render_template, session, redirect, url_for
 from firebase_admin import auth  # Only use 'auth', no need to initialize Firebase here
 import os
+import logging
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'dev-secret-key')
 app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(__file__), 'uploads')
+
+# Configure Logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # =====================
 # Session Login Endpoint

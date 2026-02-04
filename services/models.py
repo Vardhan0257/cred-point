@@ -335,6 +335,14 @@ def get_all_events(limit=None, event_type=None):
         q = q.limit(limit)
     return [ {**d.to_dict(), "id": d.id} for d in q.stream() ]
 
+def get_events_by_user(uid):
+    """
+    Get events created by a specific user efficiently using Firestore queries.
+    Requires a composite index on [created_by_uid ASC, created_at DESC].
+    """
+    q = db.collection('events').where("created_by_uid", "==", uid).order_by("created_at", direction=firestore.Query.DESCENDING)
+    return [ {**d.to_dict(), "id": d.id} for d in q.stream() ]
+
 def get_event(event_id):
     doc = db.collection('events').document(event_id).get()
     return {**doc.to_dict(), "id": doc.id} if doc.exists else None
@@ -388,5 +396,3 @@ def get_user_recommendations(uid):
 
     docs = db.collection("users").document(uid).collection("recommendations").stream()
     return [doc.to_dict() | {'id': doc.id} for doc in docs]
-
-
