@@ -1,6 +1,7 @@
-from datetime import datetime
+from datetime import datetime, date
 import csv
 import io
+from flask import url_for
 from services.models import (
     get_user_activities,
     get_user_certificates,
@@ -18,6 +19,134 @@ def format_date(date_obj):
     if isinstance(date_obj, str):
         return date_obj
     return date_obj.strftime("%d-%m-%Y")
+
+
+# =====================
+# DATA NORMALIZERS
+# =====================
+def normalize_cert(cert):
+    """
+    Ensure cert is a plain dict with expected keys and types.
+    Accepts dict-like or Firestore doc dicts. Returns normalized dict.
+    """
+    if not isinstance(cert, dict):
+        try:
+            cert = dict(cert)
+        except Exception:
+            cert = {}
+
+    # canonical keys and defaults
+    cert_id = cert.get('id') or cert.get('cert_id') or cert.get('certificate_id') or ''
+    cert.setdefault('id', cert_id)
+    cert.setdefault('name', cert.get('name') or 'Unnamed Certification')
+    cert.setdefault('authority', cert.get('authority') or '')
+    cert.setdefault('required_cpes', cert.get('required_cpes') or 0)
+    cert.setdefault('earned_cpes', cert.get('earned_cpes') or 0)
+    cert.setdefault('progress_percentage', float(cert.get('progress_percentage') or 0.0))
+    cert.setdefault('status', cert.get('status') or 'unknown')
+    # Normalize renewal_date -> date object or None
+    rd = cert.get('renewal_date')
+    if isinstance(rd, date):
+        cert['renewal_date'] = rd
+    elif isinstance(rd, datetime):
+        cert['renewal_date'] = rd.date()
+    elif isinstance(rd, str) and rd:
+        # try common formats
+        for fmt in ('%Y-%m-%d', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%S.%f'):
+            try:
+                cert['renewal_date'] = datetime.strptime(rd, fmt).date()
+                break
+            except Exception:
+                cert['renewal_date'] = None
+        # fallback to isoformat parse
+        if cert.get('renewal_date') is None:
+            try:
+                cert['renewal_date'] = datetime.fromisoformat(rd).date()
+            except Exception:
+                cert['renewal_date'] = None
+    else:
+        cert['renewal_date'] = None
+
+    # ensure numeric types
+    try:
+        cert['required_cpes'] = int(cert['required_cpes'])
+    except Exception:
+        cert['required_cpes'] = 0
+    try:
+        cert['earned_cpes'] = float(cert['earned_cpes'])
+    except Exception:
+        cert['earned_cpes'] = 0.0
+    try:
+        cert['progress_percentage'] = float(cert['progress_percentage'])
+    except Exception:
+        cert['progress_percentage'] = 0.0
+
+    # activities subkey default
+    cert.setdefault('activities', [])
+    return cert
+
+def normalize_activity(act):
+    """
+    Ensure activity is a plain dict with expected keys and types.
+    Returns normalized dict.
+    """
+    if not isinstance(act, dict):
+        try:
+            act = dict(act)
+        except Exception:
+            act = {}
+
+    act.setdefault('title', act.get('title') or act.get('name') or '')
+    act.setdefault('description', act.get('description') or act.get('desc') or '')
+
+    # unify CPE field name to 'cpe_points'
+    if 'cpe_points' not in act and 'cpe_value' in act:
+        act['cpe_points'] = float(act.get('cpe_value') or 0)
+    else:
+        try:
+            act['cpe_points'] = float(act.get('cpe_points') or 0)
+        except Exception:
+            act['cpe_points'] = 0.0
+
+    # unify activity_date -> datetime/date
+    date_obj = None
+    for key in ('date', 'activity_date', 'activityDate', 'created_at'):
+        if key in act and act[key]:
+            val = act[key]
+            try:
+                # handle datetime or date objects
+                if isinstance(val, (datetime, date)):
+                    date_obj = val if isinstance(val, datetime) else datetime.combine(val, datetime.min.time())
+                else:
+                    date_obj = datetime.fromisoformat(str(val))
+            except Exception:
+                try:
+                    date_obj = datetime.strptime(str(val), '%Y-%m-%d')
+                except Exception:
+                    date_obj = None
+            break
+    act['date_obj'] = date_obj
+    act['formatted_date'] = date_obj.strftime('%B %d, %Y') if date_obj else (act.get('activity_date') or '')
+
+    # keep certification id
+    act['certification_id'] = act.get('certification_id') or act.get('cert_id') or act.get('certification') or ''
+
+    # proof file normalization
+    proof_file_name = act.get('proof_file') or ''
+    act['proof_file'] = proof_file_name
+    
+    # If it starts with http, it's a cloud URL. Otherwise, it's legacy local.
+    if proof_file_name.startswith('http'):
+        act['proof_file_url'] = proof_file_name
+    else:
+        # Fallback for legacy local files
+        try:
+            act['proof_file_url'] = url_for('static', filename=f'uploads/{proof_file_name}') if proof_file_name else ''
+        except RuntimeError:
+            # Handle case where url_for is called outside request context
+            act['proof_file_url'] = ''
+
+    return act
 
 
 # =====================
@@ -121,4 +250,3 @@ def generate_pdf_report(certification, activities):
     p.save()
     buffer.seek(0)
     return buffer
-

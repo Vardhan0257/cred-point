@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, render_template, request, g, redirect, url_for, flash, session, send_file, make_response, current_app
-from firebase_admin import auth, firestore
+from firebase_admin import auth, firestore, storage
 from services.middleware import firebase_required  
 from services.firebase_config import db
 from services.models import (
@@ -15,7 +15,7 @@ from services.models import (
 )
 from forms import RegistrationForm, LoginForm, CertificateForm, ActivityForm, UpdateProfileForm, AddRecommendationForm, EditRecommendationForm, NewsletterEventForm
 from datetime import datetime, date
-from utils import generate_csv_report, generate_pdf_report
+from utils import generate_csv_report, generate_pdf_report, normalize_cert, normalize_activity
 from recommendation_engine import generate_recommendations
 from verification_engine import verify_activities
 from pdf_generator import generate_cpe_report
@@ -26,136 +26,8 @@ import os
 
 routes_bp = Blueprint('routes', __name__)
 
-UPLOAD_FOLDER = os.path.join('static', 'uploads')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
-
-# ---------------------------
-# Helper normalizers
-# ---------------------------
-def _normalize_cert(cert):
-    """
-    Ensure cert is a plain dict with expected keys and types.
-    Accepts dict-like or Firestore doc dicts. Returns normalized dict.
-    """
-    if not isinstance(cert, dict):
-        try:
-            cert = dict(cert)
-        except Exception:
-            cert = {}
-
-    # canonical keys and defaults
-    cert_id = cert.get('id') or cert.get('cert_id') or cert.get('certificate_id') or ''
-    cert.setdefault('id', cert_id)
-    cert.setdefault('name', cert.get('name') or 'Unnamed Certification')
-    cert.setdefault('authority', cert.get('authority') or '')
-    cert.setdefault('required_cpes', cert.get('required_cpes') or 0)
-    cert.setdefault('earned_cpes', cert.get('earned_cpes') or 0)
-    cert.setdefault('progress_percentage', float(cert.get('progress_percentage') or 0.0))
-    cert.setdefault('status', cert.get('status') or 'unknown')
-    # Normalize renewal_date -> date object or None
-    rd = cert.get('renewal_date')
-    if isinstance(rd, date):
-        cert['renewal_date'] = rd
-    elif isinstance(rd, datetime):
-        cert['renewal_date'] = rd.date()
-    elif isinstance(rd, str) and rd:
-        # try common formats
-        for fmt in ('%Y-%m-%d', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M:%S.%f'):
-            try:
-                cert['renewal_date'] = datetime.strptime(rd, fmt).date()
-                break
-            except Exception:
-                cert['renewal_date'] = None
-        # fallback to isoformat parse
-        if cert.get('renewal_date') is None:
-            try:
-                cert['renewal_date'] = datetime.fromisoformat(rd).date()
-            except Exception:
-                cert['renewal_date'] = None
-    else:
-        cert['renewal_date'] = None
-
-    # ensure numeric types
-    try:
-        cert['required_cpes'] = int(cert['required_cpes'])
-    except Exception:
-        cert['required_cpes'] = 0
-    try:
-        cert['earned_cpes'] = float(cert['earned_cpes'])
-    except Exception:
-        cert['earned_cpes'] = 0.0
-    try:
-        cert['progress_percentage'] = float(cert['progress_percentage'])
-    except Exception:
-        cert['progress_percentage'] = 0.0
-
-    # activities subkey default
-    cert.setdefault('activities', [])
-    return cert
-
-def _normalize_activity(act):
-    """
-    Ensure activity is a plain dict with expected keys and types.
-    Returns normalized dict.
-    """
-    if not isinstance(act, dict):
-        try:
-            act = dict(act)
-        except Exception:
-            act = {}
-
-    act.setdefault('title', act.get('title') or act.get('name') or '')
-    act.setdefault('description', act.get('description') or act.get('desc') or '')
-
-    # unify CPE field name to 'cpe_points'
-    if 'cpe_points' not in act and 'cpe_value' in act:
-        act['cpe_points'] = float(act.get('cpe_value') or 0)
-    else:
-        try:
-            act['cpe_points'] = float(act.get('cpe_points') or 0)
-        except Exception:
-            act['cpe_points'] = 0.0
-
-    # unify activity_date -> datetime/date
-    date_obj = None
-    for key in ('date', 'activity_date', 'activityDate', 'created_at'):
-        if key in act and act[key]:
-            val = act[key]
-            try:
-                # handle datetime or date objects
-                if isinstance(val, (datetime, date)):
-                    date_obj = val if isinstance(val, datetime) else datetime.combine(val, datetime.min.time())
-                else:
-                    date_obj = datetime.fromisoformat(str(val))
-            except Exception:
-                try:
-                    date_obj = datetime.strptime(str(val), '%Y-%m-%d')
-                except Exception:
-                    date_obj = None
-            break
-    act['date_obj'] = date_obj
-    act['formatted_date'] = date_obj.strftime('%B %d, %Y') if date_obj else (act.get('activity_date') or '')
-
-    # keep certification id
-    act['certification_id'] = act.get('certification_id') or act.get('cert_id') or act.get('certification') or ''
-
-    # proof file normalization
-    proof_file_name = act.get('proof_file') or ''
-    act['proof_file'] = proof_file_name
-
-    # generate proof file URL for templates
-    if proof_file_name:
-        try:
-            from flask import url_for
-            act['proof_file_url'] = url_for('static', filename=f'uploads/{proof_file_name}')
-        except RuntimeError:
-            # outside request context
-            act['proof_file_url'] = f'/static/uploads/{proof_file_name}'
-    else:
-        act['proof_file_url'] = ''
-
-    return act
 
 # =====================
 # Public Pages
@@ -210,13 +82,13 @@ def dashboard_page():
     # Normalize certificates
     certifications = []
     for cert in certifications_raw:
-        c = _normalize_cert(cert)
+        c = normalize_cert(cert)
         certifications.append(c)
 
     # Normalize activities
     activities = []
     for a in all_activities_raw:
-        aa = _normalize_activity(a)
+        aa = normalize_activity(a)
         # add certification authority by looking up the cert list
         cert_match = next((c for c in certifications if c.get('id') == aa.get('certification_id')), None)
         aa['certification_authority'] = cert_match['authority'] if cert_match else 'Unknown'
@@ -266,7 +138,7 @@ def dashboard_page():
 @firebase_required
 def list_certificates():
     certs_raw = get_user_certificates(g.uid) or []
-    certs = [_normalize_cert(c) for c in certs_raw]
+    certs = [normalize_cert(c) for c in certs_raw]
     return render_template('certifications.html', certifications=certs)
 
 @routes_bp.route('/certificates/new', methods=['GET', 'POST'], endpoint='add_certification')
@@ -309,7 +181,7 @@ def recommendations_page(cert_id):
     if not cert:
         return render_template('404.html'), 404
 
-    cert_norm = _normalize_cert(cert)
+    cert_norm = normalize_cert(cert)
 
     try:
         rec_docs = (
@@ -331,7 +203,7 @@ def recommendations_page(cert_id):
                 "expires_at": r.get("expires_at").strftime("%B %d, %Y") if r.get("expires_at") else None
             })
     except Exception as e:
-        print("Error fetching recommendations:", e)
+        current_app.logger.error(f"Error fetching recommendations: {e}")
         recommendations = []
 
     return render_template(
@@ -348,7 +220,7 @@ def edit_certification(cert_id):
         flash('Certification not found.', 'error')
         return redirect(url_for('routes.list_certificates'))
 
-    cert = _normalize_cert(cert_raw)
+    cert = normalize_cert(cert_raw)
     if request.method == 'POST':
         updated_data = {
             'name': request.form.get('name'),
@@ -379,7 +251,7 @@ def list_activities():
     raw_activities = get_user_activities(g.uid) or []
     processed = []
     for a in raw_activities:
-        act = _normalize_activity(a)
+        act = normalize_activity(a)
         processed.append(act)
     # sort newest first
     processed = sorted(processed, key=lambda x: x['date_obj'] or datetime.min, reverse=True)
@@ -433,12 +305,14 @@ def add_activity():
         if form.proof_file.data:
             uploaded_file = form.proof_file.data
             filename = secure_filename(uploaded_file.filename)
-            filename = f"{uuid4().hex}_{filename}"
-            uploads_dir = os.path.join(current_app.root_path, 'static', 'uploads')
-            os.makedirs(uploads_dir, exist_ok=True)
-            file_path = os.path.join(uploads_dir, filename)
-            uploaded_file.save(file_path)
-            proof_file_name = filename
+            unique_name = f"{g.uid}/{uuid4().hex}_{filename}"
+            
+            # Upload to Firebase Storage
+            bucket = storage.bucket() # Uses default bucket from firebase_config
+            blob = bucket.blob(f"proofs/{unique_name}")
+            blob.upload_from_file(uploaded_file, content_type=uploaded_file.content_type)
+            blob.make_public() # Or use signed URLs for better security
+            proof_file_name = blob.public_url
 
         activity_data = {
             'title': form.title.data,
@@ -470,7 +344,7 @@ def edit_activity(activity_id):
         flash('Activity not found.', 'danger')
         return redirect(url_for('routes.list_activities'))
 
-    activity = _normalize_activity(activity)
+    activity = normalize_activity(activity)
     form = ActivityForm()
 
     # Populate certification choices dynamically
@@ -496,12 +370,13 @@ def edit_activity(activity_id):
         if form.proof_file.data:
             uploaded_file = form.proof_file.data
             filename = secure_filename(uploaded_file.filename)
-            filename = f"{uuid4().hex}_{filename}"
-            uploads_dir = os.path.join(current_app.root_path, 'static', 'uploads')
-            os.makedirs(uploads_dir, exist_ok=True)
-            file_path = os.path.join(uploads_dir, filename)
-            uploaded_file.save(file_path)
-            proof_file_name = filename
+            unique_name = f"{g.uid}/{uuid4().hex}_{filename}"
+            
+            bucket = storage.bucket()
+            blob = bucket.blob(f"proofs/{unique_name}")
+            blob.upload_from_file(uploaded_file, content_type=uploaded_file.content_type)
+            blob.make_public()
+            proof_file_name = blob.public_url
 
         updated_data = {
             'title': form.title.data,
@@ -766,19 +641,13 @@ def profile_page():
                 filename = secure_filename(file.filename)
                 ext = filename.rsplit('.', 1)[-1].lower()
                 if ext in ALLOWED_EXTENSIONS:
-                    # Ensure upload folder exists
-                    upload_path = os.path.join(current_app.root_path, UPLOAD_FOLDER)
-                    os.makedirs(upload_path, exist_ok=True)
-
-                    # Unique filename (UID + timestamp)
-                    new_filename = f"{uid}_{int(datetime.utcnow().timestamp())}.{ext}"
-                    save_path = os.path.join(upload_path, new_filename)
-                    file.save(save_path)
-
-                    # Save relative URL for template rendering
-                    update_data["profile_image"] = url_for(
-                        'static', filename=f"uploads/{new_filename}"
-                    )
+                    blob_path = f"profiles/{uid}_{int(datetime.utcnow().timestamp())}.{ext}"
+                    bucket = storage.bucket()
+                    blob = bucket.blob(blob_path)
+                    blob.upload_from_file(file, content_type=file.content_type)
+                    blob.make_public()
+                    
+                    update_data["profile_image"] = blob.public_url
 
         if update_data:
             update_data["updated_at"] = datetime.utcnow()
@@ -802,7 +671,7 @@ def profile_page():
         }
     except Exception as e:
         auth_data = {"email": None, "email_verified": False, "photo_url": None}
-        print("Error fetching Firebase Auth user:", e)
+        current_app.logger.error(f"Error fetching Firebase Auth user: {e}")
 
     # Merge
     user_data = {**firestore_data, **auth_data}
@@ -964,6 +833,3 @@ def delete_newsletter(event_id):
     delete_event(event_id)
     flash('Event deleted successfully!', 'success')
     return redirect(url_for('routes.my_newsletter'))
-
-
-
