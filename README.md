@@ -1,6 +1,6 @@
-# Cybersecurity CPE Tracker
+# CredPoint: Enterprise Certification Compliance Platform
 
-A web application built with Flask and Firebase/Firestore to help cybersecurity professionals track Continuing Professional Education (CPE) points for certifications such as CEH, (ISC)², and others. 
+A secure, centralized compliance platform for organizations to track, audit, and manage employee certifications and Continuing Professional Education (CPE) credits.
 
 ---
 
@@ -9,26 +9,31 @@ This is a collaborative project built by  Maddilavan Indraneeli Vardhan (https:/
 Main repo: [https://github.com/Vardhan0257/cred-point](https://github.com/Vardhan0257/cred-point)
 
 
-## Features
+## Enterprise Capabilities
 
-- **Event Submission:** Users can enter event details, upload proof of attendance, and specify the CPE credits awarded.
-- **CPE Progress Tracking:** Monitor accumulated points against certification renewal requirements.
-- **Renewal Countdown:** Displays the time remaining until the next certification renewal date.
-- **Recommendations:** Personalized suggestions for gaining remaining CPE credits.
-- **Newsletter Page:** Lists cybersecurity events that do not offer CPE credits but may be of interest.
-- **CPE Credit Estimation (Planned):** Potential integration with certification bodies' guidelines to automatically allot CPE credits based on event type and criteria.
-- **Export Reports:** Generate CSV and PDF reports of your CPE activities and certifications.
+### 🛡️ Compliance & Audit
+- **Audit-Ready Evidence:** Securely store and retrieve proof-of-completion documents using time-limited Signed URLs.
+- **Automated Reporting:** Generate standardized PDF/CSV compliance reports for HR and external auditors.
+- **Verification Workflows:** Track verification status of every CPE activity.
+
+### 🚀 Team Management
+- **Renewal Risk Dashboard:** Instantly identify employees at risk of certification lapse.
+- **Centralized Tracking:** Unified view of CEH, (ISC)², and OffSec certifications across the organization.
+- **Role-Based Access:** Secure separation between employee data and compliance oversight.
+
+### ⚡ Automation
+- **Smart Recommendations:** AI-driven suggestions for CPE activities based on certification type (e.g., OffSec Labs, White Papers).
+- **Expiry Alerts:** Automated calculations for renewal deadlines and remaining credit requirements.
 
 ---
 
 ## Tech Stack
 
-- **Backend:** Flask (Python)
-- **Database:** Firebase Firestore
-- **Frontend:** HTML, CSS, JavaScript (Flask templating)
-- **Authentication:** Firebase Authentication (if applicable)
-- **PDF Generation:** ReportLab
-- **Hosting:** Compatible with any WSGI server (e.g., Gunicorn)
+- **Core:** Python Flask (Enterprise Pattern)
+- **Data & Auth:** Firebase Firestore & Authentication
+- **Storage:** Google Cloud Storage (Signed URLs)
+- **Reporting:** ReportLab (PDF Generation)
+- **Security:** Environment-based config, RBAC-ready architecture
 
 ---
 
