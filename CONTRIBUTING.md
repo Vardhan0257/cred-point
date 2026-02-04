@@ -17,7 +17,7 @@ Thank you for considering contributing to CredPoint! We welcome contributions fr
     pip install -r requirements.txt
     ```
 4.  **Set up Environment Variables**:
-    Create a `.env` file or set variables for `GOOGLE_API_TOKEN` (Firebase) and `FLASK_SECRET_KEY`.
+    Create a `.env` file or set variables for `GOOGLE_API_TOKEN`, `FLASK_SECRET_KEY`, and `FIREBASE_STORAGE_BUCKET`.
 
 ## How to Submit Changes
 

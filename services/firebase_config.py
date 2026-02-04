@@ -23,7 +23,12 @@ else:
     cred = credentials.Certificate(cred_path)
 
 # Initialize Firebase app
-firebase_admin.initialize_app(cred)
+options = {}
+storage_bucket = os.environ.get('FIREBASE_STORAGE_BUCKET')
+if storage_bucket:
+    options['storageBucket'] = storage_bucket
+
+firebase_admin.initialize_app(cred, options)
 
 # Firestore DB client
 db = firestore.client()
