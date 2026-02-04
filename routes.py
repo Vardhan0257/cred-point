@@ -15,7 +15,7 @@ from services.models import (
 )
 from forms import RegistrationForm, LoginForm, CertificateForm, ActivityForm, UpdateProfileForm, AddRecommendationForm, EditRecommendationForm, NewsletterEventForm
 from datetime import datetime, date
-from utils import generate_csv_report, generate_pdf_report, normalize_cert, normalize_activity
+from utils import generate_csv_report, generate_pdf_report, normalize_cert, normalize_activity, get_secure_file_url
 from recommendation_engine import generate_recommendations
 from verification_engine import verify_activities
 from pdf_generator import generate_cpe_report
@@ -126,6 +126,8 @@ def dashboard_page():
                 'cert_id': cert['id'],
                 'cert_name': cert['name']
             })
+    # Build reminders (Refactored to utils)
+    reminders = generate_reminders(certifications)
 
     return render_template(
         'dashboard.html',
@@ -175,6 +177,7 @@ def get_recommendations(cert_id):
         recommendations = generate_recommendations(cert.get("name"), cert.get("authority"), uid)
         return jsonify({'success': True, 'recommendations': recommendations})
     except Exception as e:
+        current_app.logger.error(f"Error generating recommendations for cert {cert_id}: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
       
 @routes_bp.route('/certificates/<cert_id>/recommendations-page', methods=['GET'], endpoint='recommendations_page')
@@ -316,8 +319,8 @@ def add_activity():
             bucket = storage.bucket() # Uses default bucket from firebase_config
             blob = bucket.blob(f"proofs/{unique_name}")
             blob.upload_from_file(uploaded_file, content_type=uploaded_file.content_type)
-            blob.make_public() # Or use signed URLs for better security
-            proof_file_name = blob.public_url
+            # SECURITY: Do NOT make public. Store path only.
+            proof_file_name = blob.name
 
         activity_data = {
             'title': form.title.data,
@@ -380,8 +383,8 @@ def edit_activity(activity_id):
             bucket = storage.bucket()
             blob = bucket.blob(f"proofs/{unique_name}")
             blob.upload_from_file(uploaded_file, content_type=uploaded_file.content_type)
-            blob.make_public()
-            proof_file_name = blob.public_url
+            # SECURITY: Do NOT make public. Store path only.
+            proof_file_name = blob.name
 
         updated_data = {
             'title': form.title.data,
@@ -650,9 +653,8 @@ def profile_page():
                     bucket = storage.bucket()
                     blob = bucket.blob(blob_path)
                     blob.upload_from_file(file, content_type=file.content_type)
-                    blob.make_public()
-                    
-                    update_data["profile_image"] = blob.public_url
+                    # SECURITY: Store path, not public URL
+                    update_data["profile_image"] = blob.name
 
         if update_data:
             update_data["updated_at"] = datetime.utcnow()
@@ -680,6 +682,10 @@ def profile_page():
 
     # Merge
     user_data = {**firestore_data, **auth_data}
+
+    # Generate signed URL for profile image if it's a storage path
+    if user_data.get("profile_image"):
+        user_data["profile_image"] = get_secure_file_url(user_data["profile_image"])
 
     # Format dates
     if "created_at" in firestore_data and firestore_data["created_at"]:
@@ -725,11 +731,14 @@ def my_newsletter():
     Show events created by the logged-in user.
     NOTE: we avoid a Firestore where+order_by composite index by
     fetching events with get_all_events() and filtering in Python.
+    Show events created by the logged-in user using efficient Firestore query.
     """
     uid = g.uid
 
     # get_all_events already orders by created_at desc in models.py
     raw = get_all_events() or []
+    # Use efficient query (requires composite index)
+    events = get_events_by_user(uid) or []
 
     # client-side filter (safe for moderate dataset sizes)
     events = [e for e in raw if e.get('created_by_uid') == uid]

@@ -1,7 +1,8 @@
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import csv
 import io
 from flask import url_for
+from firebase_admin import storage
 from services.models import (
     get_user_activities,
     get_user_certificates,
@@ -20,6 +21,40 @@ def format_date(date_obj):
         return date_obj
     return date_obj.strftime("%d-%m-%Y")
 
+
+# =====================
+# SECURITY UTILITIES
+# =====================
+def get_secure_file_url(path_or_url):
+    """
+    Generates a secure URL for file access.
+    - If HTTP URL (Legacy): Returns as is.
+    - If Cloud Path: Generates a time-limited Signed URL (1 hour).
+    - If Local File: Returns static URL.
+    """
+    if not path_or_url:
+        return ""
+    
+    # Legacy public URLs
+    if path_or_url.startswith('http'):
+        return path_or_url
+        
+    # Cloud Storage Path (e.g., proofs/uid/file.jpg)
+    if '/' in path_or_url and not path_or_url.startswith('static'):
+        try:
+            bucket = storage.bucket()
+            blob = bucket.blob(path_or_url)
+            # Generate signed URL valid for 60 minutes
+            return blob.generate_signed_url(expiration=timedelta(minutes=60))
+        except Exception as e:
+            print(f"Error generating signed URL: {e}") # Fallback logging
+            return ""
+            
+    # Local Static File (Legacy/Dev)
+    try:
+        return url_for('static', filename=f'uploads/{path_or_url}')
+    except RuntimeError:
+        return ""
 
 # =====================
 # DATA NORMALIZERS
@@ -135,16 +170,8 @@ def normalize_activity(act):
     proof_file_name = act.get('proof_file') or ''
     act['proof_file'] = proof_file_name
     
-    # If it starts with http, it's a cloud URL. Otherwise, it's legacy local.
-    if proof_file_name.startswith('http'):
-        act['proof_file_url'] = proof_file_name
-    else:
-        # Fallback for legacy local files
-        try:
-            act['proof_file_url'] = url_for('static', filename=f'uploads/{proof_file_name}') if proof_file_name else ''
-        except RuntimeError:
-            # Handle case where url_for is called outside request context
-            act['proof_file_url'] = ''
+    # Secure URL generation
+    act['proof_file_url'] = get_secure_file_url(proof_file_name)
 
     return act
 
