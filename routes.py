@@ -39,7 +39,12 @@ def index():
 @routes_bp.route('/login', methods=['GET'], endpoint='login_page')
 def login_page():
     form = LoginForm()
-    return render_template('login.html', form=form)
+    firebase_config = {
+        "apiKey": os.environ.get('FIREBASE_API_KEY', ''),
+        "authDomain": os.environ.get('FIREBASE_AUTH_DOMAIN', ''),
+        "projectId": os.environ.get('FIREBASE_PROJECT_ID', '')
+    }
+    return render_template('login.html', form=form, firebase_config=firebase_config)
 
 @routes_bp.route('/register', methods=['GET', 'POST'], endpoint='register_page')
 def register_page():

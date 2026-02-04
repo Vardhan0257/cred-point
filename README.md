@@ -116,7 +116,7 @@ Main repo: [https://github.com/Vardhan0257/cred-point](https://github.com/Vardha
 
 ## Contribution
 
-Contributions and suggestions are welcome! Please open an issue or submit a pull request.
+Contributions and suggestions are welcome! Please read our Contribution Guidelines before submitting a pull request.
 
 ---
 
@@ -136,4 +136,3 @@ For questions or collaboration inquiries, please reach out via vardhanm0257@gmai
 
 - Inspired by the need to simplify CPE tracking for cybersecurity professionals.
 - Thanks to the Firebase team.
-
