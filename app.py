@@ -50,6 +50,7 @@ def verify_token():
     try:
         decoded_token = auth.verify_id_token(id_token)
         g.uid = decoded_token['uid']
+        g.user = decoded_token  # Fix: Populate g.user so routes don't crash
     except Exception:
         session.clear()
         return redirect(url_for('routes.login_page'))
