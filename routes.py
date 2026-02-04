@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, render_template, request, g, redirect, url_for, flash, session, send_file, make_response, current_app
+from flask import Blueprint, request, jsonify, render_template, g, redirect, url_for, flash, session, send_file, make_response, current_app
 from firebase_admin import auth, firestore, storage
 from services.middleware import firebase_required  
 from services.firebase_config import db
@@ -15,7 +15,7 @@ from services.models import (
 )
 from forms import RegistrationForm, LoginForm, CertificateForm, ActivityForm, UpdateProfileForm, AddRecommendationForm, EditRecommendationForm, NewsletterEventForm
 from datetime import datetime, date
-from utils import generate_csv_report, generate_pdf_report, normalize_cert, normalize_activity, get_secure_file_url
+from utils import generate_csv_report, generate_pdf_report, normalize_cert, normalize_activity, get_secure_file_url, build_dashboard_data
 from recommendation_engine import generate_recommendations
 from verification_engine import verify_activities
 from pdf_generator import generate_cpe_report
@@ -84,50 +84,10 @@ def dashboard_page():
     certifications_raw = get_user_certificates(uid) or []
     all_activities_raw = get_user_activities(uid) or []
 
-    # Normalize certificates
-    certifications = []
-    for cert in certifications_raw:
-        c = normalize_cert(cert)
-        certifications.append(c)
-
-    # Normalize activities
-    activities = []
-    for a in all_activities_raw:
-        aa = normalize_activity(a)
-        # add certification authority by looking up the cert list
-        cert_match = next((c for c in certifications if c.get('id') == aa.get('certification_id')), None)
-        aa['certification_authority'] = cert_match['authority'] if cert_match else 'Unknown'
-        activities.append(aa)
-
-    # Sort activities by date (newest first) then take top 3
-    activities_sorted = sorted(activities, key=lambda x: x['date_obj'] or datetime.min, reverse=True)
-    recent_activities = activities_sorted[:3]
-
-    # Build reminders
-    reminders = []
-    for cert in certifications:
-        rd = cert.get('renewal_date')
-        if rd:
-            try:
-                days_until_renewal = (rd - date.today()).days
-            except Exception:
-                days_until_renewal = None
-            if days_until_renewal is not None and days_until_renewal <= 90 and cert.get('progress_percentage', 0.0) < 100:
-                reminders.append({
-                    'type': 'renewal',
-                    'message': f"{cert['name']} renewal is in {days_until_renewal} days and you need {max(0, cert['required_cpes'] - cert['earned_cpes']):.1f} more CPEs",
-                    'cert_id': cert['id'],
-                    'cert_name': cert['name']
-                })
-        if cert.get('progress_percentage', 0.0) < 25:
-            reminders.append({
-                'type': 'low_progress',
-                'message': f"{cert['name']} has very low progress ({cert['progress_percentage']:.1f}%)",
-                'cert_id': cert['id'],
-                'cert_name': cert['name']
-            })
-    # Build reminders (Refactored to utils)
-    reminders = generate_reminders(certifications)
+    certifications, recent_activities, reminders = build_dashboard_data(
+        certifications_raw,
+        all_activities_raw
+    )
 
     return render_template(
         'dashboard.html',
@@ -731,14 +691,11 @@ def my_newsletter():
     Show events created by the logged-in user.
     NOTE: we avoid a Firestore where+order_by composite index by
     fetching events with get_all_events() and filtering in Python.
-    Show events created by the logged-in user using efficient Firestore query.
     """
     uid = g.uid
 
     # get_all_events already orders by created_at desc in models.py
     raw = get_all_events() or []
-    # Use efficient query (requires composite index)
-    events = get_events_by_user(uid) or []
 
     # client-side filter (safe for moderate dataset sizes)
     events = [e for e in raw if e.get('created_by_uid') == uid]

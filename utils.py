@@ -277,3 +277,69 @@ def generate_pdf_report(certification, activities):
     p.save()
     buffer.seek(0)
     return buffer
+
+# =====================
+# BUSINESS LOGIC HELPERS (PHASE 2)
+# =====================
+def build_dashboard_data(certifications_raw, activities_raw):
+    """
+    Moves dashboard business logic OUT of routes.py.
+    Enterprise-style controller separation.
+    """
+
+    certifications = [normalize_cert(c) for c in certifications_raw]
+
+    # Normalize + enrich activities
+    activities = []
+    for a in activities_raw:
+        aa = normalize_activity(a)
+        cert_match = next(
+            (c for c in certifications if c.get('id') == aa.get('certification_id')),
+            None
+        )
+        aa['certification_authority'] = cert_match['authority'] if cert_match else 'Unknown'
+        activities.append(aa)
+
+    # Sort newest activities
+    activities_sorted = sorted(
+        activities,
+        key=lambda x: x['date_obj'] or datetime.min,
+        reverse=True
+    )
+
+    recent_activities = activities_sorted[:3]
+
+    # Generate reminders (moved from routes.py)
+    reminders = []
+    today = datetime.utcnow().date()
+
+    for cert in certifications:
+        rd = cert.get('renewal_date')
+
+        if rd:
+            try:
+                days_until_renewal = (rd - today).days
+            except Exception:
+                days_until_renewal = None
+
+            if (
+                days_until_renewal is not None
+                and days_until_renewal <= 90
+                and cert.get('progress_percentage', 0.0) < 100
+            ):
+                reminders.append({
+                    'type': 'renewal',
+                    'message': f"{cert['name']} renewal is in {days_until_renewal} days and you need {max(0, cert['required_cpes'] - cert['earned_cpes']):.1f} more CPEs",
+                    'cert_id': cert['id'],
+                    'cert_name': cert['name']
+                })
+
+        if cert.get('progress_percentage', 0.0) < 25:
+            reminders.append({
+                'type': 'low_progress',
+                'message': f"{cert['name']} has very low progress ({cert['progress_percentage']:.1f}%)",
+                'cert_id': cert['id'],
+                'cert_name': cert['name']
+            })
+
+    return certifications, recent_activities, reminders
