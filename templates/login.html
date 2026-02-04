@@ -51,9 +51,9 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script>
     const firebaseConfig = {
-        apiKey: "AIzaSyARLq-CF0eH5GLmoeylnLpj8stljfwStKU",
-        authDomain: "credpoint-16422.firebaseapp.com",
-        projectId: "credpoint-16422"
+        apiKey: "{{ firebase_config.apiKey }}",
+        authDomain: "{{ firebase_config.authDomain }}",
+        projectId: "{{ firebase_config.projectId }}"
     };
     firebase.initializeApp(firebaseConfig);
 
