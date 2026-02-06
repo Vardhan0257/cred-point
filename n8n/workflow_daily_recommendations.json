@@ -1,0 +1,119 @@
+{
+  "name": "Daily CPE Recommendations Generator",
+  "nodes": [
+    {
+      "parameters": {
+        "trigger": "every",
+        "triggerUnit": "day",
+        "triggerValue": 1,
+        "triggerAtHour": 9,
+        "triggerAtMinute": 0
+      },
+      "name": "Schedule Daily",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "collection": "users",
+        "query": {
+          "operation": "query",
+          "limit": 1000
+        },
+        "options": {}
+      },
+      "name": "Get All Users",
+      "type": "n8n-nodes-base.googleFirestore",
+      "typeVersion": 1,
+      "typeVersion": 1,
+      "position": [450, 300],
+      "credentials": {
+        "googleFirestoreOAuth2Api": "firestore_cred"
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// For each user, fetch their certifications and check which are nearing renewal or low progress\nconst users = $json.body || [];\nconst results = [];\n\nusers.forEach(user => {\n  // Mark users for recommendation generation\n  results.push({\n    uid: user.uid || user.id,\n    name: user.name || user.email,\n    email: user.email\n  });\n});\n\nreturn results;"
+      },
+      "name": "Extract User Info",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:5000/recommendations/generate",
+        "authentication": "none",
+        "method": "POST",
+        "body": "{\n  \"uid\": \"{{ $json.uid }}\",\n  \"force_generate\": true\n}",
+        "options": {}
+      },
+      "name": "Call Recommendation Engine",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "email": "{{ $json.email }}",
+        "subject": "Your Daily CPE Recommendations",
+        "text": "Hi {{ $json.name }},\\n\\nWe've generated personalized CPE recommendations for you. Log in to your dashboard to review them.\\n\\nBest regards,\\nCPE Management Team",
+        "html": "<h2>Your Daily CPE Recommendations</h2><p>Hi {{ $json.name }},</p><p>We've generated personalized CPE recommendations for you based on your certifications and progress.</p><p><a href='http://localhost:5000/dashboard'>View Recommendations</a></p><p>Best regards,<br>CPE Management Team</p>"
+      },
+      "name": "Send Email Notification",
+      "type": "n8n-nodes-base.sendGrid",
+      "typeVersion": 1,
+      "position": [1050, 300],
+      "credentials": {
+        "sendGridApi": "sendgrid_cred"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Daily": {
+      "main": [
+        [
+          {
+            "node": "Get All Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Users": {
+      "main": [
+        [
+          {
+            "node": "Extract User Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract User Info": {
+      "main": [
+        [
+          {
+            "node": "Call Recommendation Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Recommendation Engine": {
+      "main": [
+        [
+          {
+            "node": "Send Email Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

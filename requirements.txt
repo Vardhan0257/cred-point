@@ -6,3 +6,5 @@ firebase-admin>=6.6.0
 google-cloud-firestore>=2.19.0
 reportlab>=4.4.3
 urllib3>=2.3.0
+Flask-Limiter>=3.5.0
+python-magic>=0.4.27

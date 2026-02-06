@@ -1,0 +1,120 @@
+{
+  "name": "Admin Notification on Pending CPE",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerEvent": "documentWritten",
+        "collection": "users",
+        "options": {
+          "query": "status == 'pending'"
+        }
+      },
+      "name": "Firestore Activity Created",
+      "type": "n8n-nodes-base.googleFirestore",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "credentials": {
+        "googleFirestoreOAuth2Api": "firestore_cred"
+      }
+    },
+    {
+      "parameters": {
+        "collection": "users",
+        "documentId": "{{ $json.admin_uid }}",
+        "options": {}
+      },
+      "name": "Get Admin User",
+      "type": "n8n-nodes-base.googleFirestore",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "credentials": {
+        "googleFirestoreOAuth2Api": "firestore_cred"
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "{{ $json.status }}",
+              "condition": "equal",
+              "value2": "pending"
+            }
+          ]
+        }
+      },
+      "name": "Is Status Pending?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "channel": "#admin-alerts",
+        "text": "📋 New Pending CPE Submission\\n\\nUser: {{ $json.uid }}\\nActivity: {{ $json.title }}\\nType: {{ $json.activity_type }}\\nSubmission Source: {{ $json.submission_source }}\\n\\nReview: http://localhost:5000/admin/pending-cpe",
+        "username": "CPE Bot"
+      },
+      "name": "Slack Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 1,
+      "position": [850, 300],
+      "credentials": {
+        "slackApi": "slack_cred"
+      }
+    },
+    {
+      "parameters": {
+        "email": "{{ $json.admin_email }}",
+        "subject": "New Pending CPE Submission Requires Review",
+        "html": "<h2>Pending CPE Submission</h2><p>A new CPE submission requires your review.</p><ul><li><strong>User ID:</strong> {{ $json.uid }}</li><li><strong>Activity:</strong> {{ $json.title }}</li><li><strong>Type:</strong> {{ $json.activity_type }}</li><li><strong>Duration:</strong> {{ $json.duration_hours || 'N/A' }} hours</li><li><strong>Source:</strong> {{ $json.submission_source }}</li></ul><p><a href='http://localhost:5000/admin/pending-cpe' style='background-color:#007bff; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;'>Review Submission</a></p>"
+      },
+      "name": "Email Admin",
+      "type": "n8n-nodes-base.sendGrid",
+      "typeVersion": 1,
+      "position": [850, 400],
+      "credentials": {
+        "sendGridApi": "sendgrid_cred"
+      }
+    }
+  ],
+  "connections": {
+    "Firestore Activity Created": {
+      "main": [
+        [
+          {
+            "node": "Is Status Pending?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Status Pending?": {
+      "main": [
+        [
+          {
+            "node": "Get Admin User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Admin User": {
+      "main": [
+        [
+          {
+            "node": "Slack Notification",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Email Admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

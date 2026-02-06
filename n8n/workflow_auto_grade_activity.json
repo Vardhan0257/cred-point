@@ -1,0 +1,150 @@
+{
+  "name": "Auto-Grade CPE Activity on Creation",
+  "nodes": [
+    {
+      "parameters": {
+        "collection": "users",
+        "documentId": "{{ $json.uid }}",
+        "options": {}
+      },
+      "name": "Firestore Trigger",
+      "type": "n8n-nodes-base.googleFirestore",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "credentials": {
+        "googleFirestoreOAuth2Api": "firestore_cred"
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// Grading rules based on OffSec handbook\nconst activity = $json;\nconst atype = (activity.activity_type || '').toLowerCase();\nconst src = (activity.submission_source || '').toLowerCase();\nconst dur = activity.duration_hours;\n\nlet awarded = null;\nlet reason = 'unable_to_grade';\nlet auto = false;\n\n// If already awarded, return existing\nif (activity.awarded_cpe !== null && activity.awarded_cpe !== undefined) {\n  return { awarded_cpe: activity.awarded_cpe, reason: 'already_awarded', auto_approved: true };\n}\n\n// Course: 1 CPE per hour, cap 40\nif (atype === 'course') {\n  if (dur) {\n    awarded = parseFloat(dur);\n    if (awarded > 40) awarded = 40.0;\n    reason = `course_${awarded}_hours`;\n    auto = true;\n  } else {\n    reason = 'course_missing_duration';\n    auto = false;\n  }\n}\n\n// Webinar, Conference: 1 CPE per hour\nif (['webinar', 'conference'].includes(atype)) {\n  if (dur) {\n    awarded = parseFloat(dur);\n    reason = `${atype}_${awarded}_hours`;\n    auto = true;\n  } else {\n    reason = `${atype}_missing_duration`;\n    auto = false;\n  }\n}\n\n// Public speaking / Published paper: fixed 4 CPEs\nif (['public_speaking', 'published_paper'].includes(atype)) {\n  const evidence = activity.proof_file || activity.evidence_paths;\n  if (evidence) {\n    awarded = 4.0;\n    reason = `${atype}_standard`;\n    auto = true;\n  } else {\n    reason = `${atype}_no_evidence`;\n    auto = false;\n  }\n}\n\n// Lab submission: require acceptance\nif (atype === 'lab_submission') {\n  const accepted = activity.accepted || false;\n  if (accepted) {\n    awarded = 20.0;\n    reason = 'lab_submission_accepted';\n    auto = true;\n  } else {\n    reason = 'lab_submission_pending_acceptance';\n    auto = false;\n  }\n}\n\n// Default: user-provided with evidence\nif (activity.cpe_points !== null && activity.cpe_points !== undefined && awarded === null) {\n  if (activity.proof_file || activity.evidence_paths) {\n    awarded = parseFloat(activity.cpe_points);\n    reason = 'user_provided_with_evidence';\n    auto = true;\n  } else {\n    reason = 'user_provided_no_evidence';\n    auto = false;\n  }\n}\n\nreturn { awarded_cpe: awarded, reason: reason, auto_approved: auto };"
+      },
+      "name": "Grade Activity",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "{{ $json.auto_approved }}",
+              "condition": "equal",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Auto-Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "collection": "users/{{ $json.uid }}/activities",
+        "documentId": "{{ $json.activity_id }}",
+        "document": {
+          "awarded_cpe": "{{ $json.awarded_cpe }}",
+          "awarded_reason": "{{ $json.reason }}",
+          "status": "approved",
+          "updated_at": "{{ $today.toISOString() }}"
+        },
+        "options": {}
+      },
+      "name": "Update Activity Auto-Approved",
+      "type": "n8n-nodes-base.googleFirestore",
+      "typeVersion": 1,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "collection": "users/{{ $json.uid }}/verifications",
+        "document": {
+          "activity_id": "{{ $json.activity_id }}",
+          "status": "verified",
+          "user_id": "{{ $json.uid }}",
+          "awarded_cpe": "{{ $json.awarded_cpe }}",
+          "reason": "{{ $json.reason }}",
+          "auto_approved": true,
+          "verified_at": "{{ $today.toISOString() }}"
+        },
+        "options": {}
+      },
+      "name": "Create Verification Record",
+      "type": "n8n-nodes-base.googleFirestore",
+      "typeVersion": 1,
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "collection": "users/{{ $json.uid }}/activities",
+        "documentId": "{{ $json.activity_id }}",
+        "document": {
+          "status": "pending",
+          "awarded_reason": "{{ $json.reason }}",
+          "updated_at": "{{ $today.toISOString() }}"
+        },
+        "options": {}
+      },
+      "name": "Update Activity Pending",
+      "type": "n8n-nodes-base.googleFirestore",
+      "typeVersion": 1,
+      "position": [850, 400]
+    }
+  ],
+  "connections": {
+    "Firestore Trigger": {
+      "main": [
+        [
+          {
+            "node": "Grade Activity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grade Activity": {
+      "main": [
+        [
+          {
+            "node": "Auto-Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-Approved?": {
+      "main": [
+        [
+          {
+            "node": "Update Activity Auto-Approved",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Activity Pending",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Activity Auto-Approved": {
+      "main": [
+        [
+          {
+            "node": "Create Verification Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
