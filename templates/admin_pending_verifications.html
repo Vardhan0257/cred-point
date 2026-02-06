@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+
+{% block title %}Pending CPE Submissions{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Pending CPE Submissions</h1>
+    <a href="{{ url_for('routes.dashboard_page') }}" class="btn btn-secondary">Back to Dashboard</a>
+</div>
+
+{% if pending %}
+<table class="table table-hover">
+    <thead>
+        <tr>
+            <th>User</th>
+            <th>Activity</th>
+            <th>Type</th>
+            <th>Duration</th>
+            <th>Submitted At</th>
+            <th>Evidence</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for a in pending %}
+        <tr>
+            <td>{{ a.user_id }}</td>
+            <td>{{ a.title or a.activity_type }}</td>
+            <td>{{ a.activity_type }}</td>
+            <td>{{ a.duration_hours or '-' }}</td>
+            <td>{{ a.submitted_at if a.submitted_at else '-' }}</td>
+            <td>
+                {% if a.proof_file %}
+                    {{ a.proof_file }}
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td>
+                <form method="post" action="{{ url_for('routes.admin_approve_activity', user_id=a.user_id, activity_id=a.activity_id) }}" style="display:inline-block;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="number" step="0.1" name="awarded_cpe" placeholder="CPE" class="form-control form-control-sm mb-1" style="width:90px; display:inline-block;" />
+                    <input type="text" name="reason" placeholder="Reason" class="form-control form-control-sm mb-1" style="width:180px; display:inline-block;" />
+                    <button class="btn btn-sm btn-success" type="submit">Approve</button>
+                </form>
+                <form method="post" action="{{ url_for('routes.admin_reject_activity', user_id=a.user_id, activity_id=a.activity_id) }}" style="display:inline-block; margin-left:6px;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="text" name="reason" placeholder="Rejection reason" class="form-control form-control-sm mb-1" style="width:190px; display:inline-block;" />
+                    <button class="btn btn-sm btn-danger" type="submit">Reject</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+    <div class="text-center py-4">
+        <p class="text-muted">No pending CPE submissions.</p>
+    </div>
+{% endif %}
+
+{% endblock %}

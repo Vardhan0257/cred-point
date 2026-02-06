@@ -1,10 +1,81 @@
 {% extends 'base.html' %}
 
-{% block title %}Dashboard - CPE Management Platform{% endblock %}
+{% block title %}Dashboard - CredPoint Enterprise{% endblock %}
 
 {% block content %}
+<style>
+    .stat-card {
+        border: none;
+        border-radius: 0.75rem;
+        transition: all 0.3s ease;
+        background: linear-gradient(135deg, rgba(13, 71, 161, 0.1) 0%, rgba(0, 137, 123, 0.05) 100%);
+    }
+    
+    .stat-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 20px rgba(13, 71, 161, 0.2);
+    }
+    
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #0d47a1, #00897b);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    .stat-label {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: #b0b0b0;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .progress-section {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 0.75rem;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .activity-item {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+        transition: all 0.2s ease;
+    }
+    
+    .activity-item:hover {
+        background: rgba(13, 71, 161, 0.05);
+    }
+    
+    .activity-item:last-child {
+        border-bottom: none;
+    }
+    
+    .activity-icon {
+        width: 48px;
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #0d47a1, #1565c0);
+        border-radius: 0.5rem;
+        margin-right: 1rem;
+        color: #fff;
+        flex-shrink: 0;
+    }
+</style>
+
 <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1><i class="fas fa-tachometer-alt text-primary me-2"></i>Dashboard</h1>
+    <div>
+        <h1 class="mb-1"><i class="fas fa-chart-line me-2" style="color: #0d47a1;"></i>Welcome Back</h1>
+        <p class="text-secondary mb-0">Manage your CPE certifications and track your progress</p>
+    </div>
     <div class="d-flex align-items-center">
         <!-- Notifications/Reminders Dropdown -->
         <div class="dropdown me-3">
@@ -139,14 +210,14 @@
                             <div class="progress mb-2" style="height: 8px;">
                                 <div class="progress-bar bg-{{ 'success' if cert.status == 'complete' else 'warning' if cert.status == 'on-track' else 'info' if cert.status == 'behind' else 'danger' }}" 
                                      role="progressbar" 
-                                     style="width: {{ cert.progress_percentage }}%">
+                                     style="width: {{ cert.progress_percentage|default(0) }}%">
                                 </div>
                             </div>
 
                             <div class="d-flex justify-content-between align-items-center">
                                 <small class="text-muted">
                                     {{ cert.earned_cpes }}/{{ cert.required_cpes }} CPEs
-                                    ({{ "%.1f"|format(cert.progress_percentage) }}%)
+                                    ({{ '%.1f'|format(cert.progress_percentage|default(0)) }}%)
                                 </small>
                                 <div>
                                     <a href="{{ url_for('routes.export_certification', cert_id=cert.id, format='pdf') }}" 

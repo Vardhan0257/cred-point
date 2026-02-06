@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, render_template, g, redirect, url_for, flash, session, send_file, make_response, current_app
 from firebase_admin import auth, firestore, storage
-from services.middleware import firebase_required  
+from services.middleware import firebase_required, admin_required  
 from services.firebase_config import db
 from services.models import (
     create_user, get_user,
@@ -22,11 +22,56 @@ from pdf_generator import generate_cpe_report
 from werkzeug.utils import secure_filename
 from uuid import uuid4
 from google.cloud.firestore import FieldFilter
+from app import limiter
 import os
+import mimetypes
+
 
 routes_bp = Blueprint('routes', __name__)
 
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf'}
+MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
+SAFE_MIME_TYPES = {'image/png', 'image/jpeg', 'application/pdf'}
+
+
+def validate_file_upload(file_obj):
+    """
+    Validates uploaded file: extension, MIME type, size.
+    Returns (is_valid: bool, error_message: str or None)
+    """
+    if not file_obj or file_obj.filename == '':
+        return False, 'No file selected'
+
+    # Check file size
+    file_obj.seek(0, 2)  # Seek to end
+    file_size = file_obj.tell()
+    file_obj.seek(0)  # Reset to start
+    
+    if file_size > MAX_UPLOAD_SIZE:
+        return False, f'File too large (max {MAX_UPLOAD_SIZE / 1024 / 1024:.0f} MB)'
+    
+    if file_size == 0:
+        return False, 'File is empty'
+
+    # Check extension
+    filename = secure_filename(file_obj.filename)
+    if '.' not in filename:
+        return False, 'File has no extension'
+    
+    ext = filename.rsplit('.', 1)[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        return False, f'File type not allowed. Allowed: {", ".join(ALLOWED_EXTENSIONS)}'
+
+    # Check MIME type
+    mime_type, _ = mimetypes.guess_type(filename)
+    if mime_type not in SAFE_MIME_TYPES:
+        # Try content-type header as fallback
+        content_type = file_obj.content_type or ''
+        if content_type not in SAFE_MIME_TYPES:
+            return False, f'Invalid file MIME type: {mime_type or content_type}'
+
+    return True, None
+
 
 
 # =====================
@@ -37,6 +82,7 @@ def index():
     return render_template('index.html')
 
 @routes_bp.route('/login', methods=['GET'], endpoint='login_page')
+@limiter.limit('5 per 15 minutes')
 def login_page():
     form = LoginForm()
     firebase_config = {
@@ -47,6 +93,7 @@ def login_page():
     return render_template('login.html', form=form, firebase_config=firebase_config)
 
 @routes_bp.route('/register', methods=['GET', 'POST'], endpoint='register_page')
+@limiter.limit('3 per 1 hour')
 def register_page():
     form = RegistrationForm()
     if request.method == 'POST':
@@ -272,6 +319,13 @@ def add_activity():
         proof_file_name = None
         if form.proof_file.data:
             uploaded_file = form.proof_file.data
+            
+            # Validate file before upload
+            is_valid, error_msg = validate_file_upload(uploaded_file)
+            if not is_valid:
+                flash(f'File upload error: {error_msg}', 'danger')
+                return render_template('add_activity.html', form=form)
+            
             filename = secure_filename(uploaded_file.filename)
             unique_name = f"{g.uid}/{uuid4().hex}_{filename}"
             
@@ -293,6 +347,12 @@ def add_activity():
             'proof_file': proof_file_name,
             'user_id': uid
         }
+
+        # CPE metadata
+        activity_data['duration_hours'] = float(form.duration_hours.data) if form.duration_hours.data else None
+        activity_data['submission_source'] = form.submission_source.data or 'internal'
+        activity_data['subcategory'] = form.subcategory.data or None
+        activity_data['submitted_at'] = datetime.utcnow()
 
         create_activity(uid, activity_data)
         flash('Activity added successfully!', 'success')
@@ -337,6 +397,13 @@ def edit_activity(activity_id):
         proof_file_name = activity.get('proof_file')  # keep old proof file if not changed
         if form.proof_file.data:
             uploaded_file = form.proof_file.data
+            
+            # Validate file before upload
+            is_valid, error_msg = validate_file_upload(uploaded_file)
+            if not is_valid:
+                flash(f'File upload error: {error_msg}', 'danger')
+                return render_template('edit_activity.html', form=form, activity=activity)
+            
             filename = secure_filename(uploaded_file.filename)
             unique_name = f"{g.uid}/{uuid4().hex}_{filename}"
             
@@ -354,7 +421,10 @@ def edit_activity(activity_id):
             'description': form.description.data,
             'activity_date': form.activity_date.data.isoformat() if form.activity_date.data else None,
             'certification_id': form.certification_id.data,
-            'proof_file': proof_file_name
+            'proof_file': proof_file_name,
+            'duration_hours': float(form.duration_hours.data) if form.duration_hours.data else None,
+            'submission_source': form.submission_source.data or 'internal',
+            'subcategory': form.subcategory.data or None
         }
 
         # We’ll need an update function in models.py — but for now use create_activity with same ID if your storage supports overwrite
@@ -411,12 +481,117 @@ def add_recommendation():
 
     return render_template("add_recommendation.html", form=form)
 
+# =====================
+# Recommendations API (for n8n workflows)
+# =====================
+@routes_bp.route('/recommendations/generate', methods=['POST'])
+def generate_recommendations_api():
+    """
+    API endpoint for n8n to trigger recommendation generation.
+    Accepts JSON: {"uid": "user_id", "force_generate": true}
+    """
+    try:
+        data = request.get_json()
+        uid = data.get('uid') if data else None
+        force = data.get('force_generate', False) if data else False
+
+        if not uid:
+            return jsonify({'success': False, 'error': 'uid required'}), 400
+
+        # Generate recommendations for this user
+        recs = generate_recommendations(None, None, uid, force_refresh=force)
+        return jsonify({'success': True, 'recommendations': recs, 'count': len(recs) if recs else 0}), 200
+    except Exception as e:
+        current_app.logger.error(f"Error generating recommendations for {uid}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @routes_bp.route("/recommendations/pending", methods=["GET"])
 @firebase_required
 def pending_recommendations():
     docs = db.collection("recommendations").where("approved", "==", False).stream()
     recs = [dict(doc.to_dict(), id=doc.id) for doc in docs]
     return render_template("pending_recommendations.html", recommendations=recs)
+
+# =====================
+# Admin: Pending CPE Submissions
+# =====================
+@routes_bp.route('/admin/pending-cpe', methods=['GET'])
+@firebase_required
+@admin_required
+def admin_pending_cpe():
+    try:
+        docs = db.collection_group('activities').where('status', '==', 'pending').stream()
+        pending = []
+        for doc in docs:
+            a = doc.to_dict()
+            # determine user id from document path (users/{uid}/activities/{activity_id})
+            parent = doc.reference.parent.parent
+            user_id = parent.id if parent is not None else None
+            a['activity_id'] = doc.id
+            a['user_id'] = user_id
+            pending.append(a)
+    except Exception as e:
+        current_app.logger.error(f"Error fetching pending CPEs: {e}")
+        pending = []
+    return render_template('admin_pending_verifications.html', pending=pending)
+
+@routes_bp.route('/admin/approve/<string:user_id>/<string:activity_id>', methods=['POST'])
+@firebase_required
+@admin_required
+def admin_approve_activity(user_id, activity_id):
+    awarded = request.form.get('awarded_cpe')
+    reason = request.form.get('reason') or 'approved_by_admin'
+    try:
+        activity_ref = db.collection('users').document(user_id).collection('activities').document(activity_id)
+        update_payload = {
+            'status': 'approved',
+            'awarded_cpe': float(awarded) if awarded else None,
+            'awarded_reason': reason,
+            'awarded_by': g.uid,
+            'updated_at': datetime.utcnow()
+        }
+        activity_ref.update(update_payload)
+
+        ver = {
+            'activity_id': activity_id,
+            'status': 'verified',
+            'user_id': user_id,
+            'awarded_cpe': float(awarded) if awarded else None,
+            'reason': reason,
+            'auto_approved': False,
+            'verified_at': datetime.utcnow()
+        }
+        create_verification(user_id, ver)
+        flash('Activity approved successfully.', 'success')
+    except Exception as e:
+        current_app.logger.error(f"Error approving activity {activity_id} for user {user_id}: {e}")
+        flash('Error approving activity.', 'danger')
+    return redirect(url_for('routes.admin_pending_cpe'))
+
+@routes_bp.route('/admin/reject/<string:user_id>/<string:activity_id>', methods=['POST'])
+@firebase_required
+@admin_required
+def admin_reject_activity(user_id, activity_id):
+    reason = request.form.get('reason') or 'rejected_by_admin'
+    try:
+        activity_ref = db.collection('users').document(user_id).collection('activities').document(activity_id)
+        activity_ref.update({'status': 'rejected', 'awarded_reason': reason, 'awarded_by': g.uid, 'updated_at': datetime.utcnow()})
+
+        ver = {
+            'activity_id': activity_id,
+            'status': 'rejected',
+            'user_id': user_id,
+            'awarded_cpe': None,
+            'reason': reason,
+            'auto_approved': False,
+            'verified_at': datetime.utcnow()
+        }
+        create_verification(user_id, ver)
+        flash('Activity rejected.', 'info')
+    except Exception as e:
+        current_app.logger.error(f"Error rejecting activity {activity_id} for user {user_id}: {e}")
+        flash('Error rejecting activity.', 'danger')
+    return redirect(url_for('routes.admin_pending_cpe'))
 
 @routes_bp.route("/my-recommendations", methods=["GET"])
 @firebase_required
@@ -606,6 +781,12 @@ def profile_page():
         if form.profile_image.data:
             file = form.profile_image.data
             if file.filename:
+                # Validate file before upload
+                is_valid, error_msg = validate_file_upload(file)
+                if not is_valid:
+                    flash(f'Profile image upload error: {error_msg}', 'danger')
+                    return redirect(url_for('routes.profile_page'))
+                
                 filename = secure_filename(file.filename)
                 ext = filename.rsplit('.', 1)[-1].lower()
                 if ext in ALLOWED_EXTENSIONS:

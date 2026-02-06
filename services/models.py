@@ -83,6 +83,19 @@ def create_activity(uid, data):
     # include id in document (helps your client-side lists that look for 'id')
     data_to_store.setdefault('id', ref.id)
 
+    # CPE metadata defaults
+    data_to_store.setdefault('activity_type', data.get('activity_type') or 'unknown')
+    data_to_store.setdefault('duration_hours', float(data.get('duration_hours')) if data.get('duration_hours') is not None else None)
+    data_to_store.setdefault('submission_source', data.get('submission_source') or 'internal')
+    data_to_store.setdefault('subcategory', data.get('subcategory'))
+    # proof_file handled by routes as 'proof_file'
+    data_to_store.setdefault('status', data.get('status') or 'pending')
+    data_to_store.setdefault('awarded_cpe', data.get('awarded_cpe'))
+    data_to_store.setdefault('awarded_reason', data.get('awarded_reason'))
+    data_to_store.setdefault('awarded_by', data.get('awarded_by'))
+    data_to_store.setdefault('offsec_submission_id', data.get('offsec_submission_id'))
+    data_to_store.setdefault('submitted_at', data.get('submitted_at') or datetime.utcnow())
+
     ref.set(data_to_store)
 
     # increment user's credits atomically; fallback to full recalculation if update fails
