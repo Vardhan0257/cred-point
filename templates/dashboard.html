@@ -116,7 +116,7 @@
 <!-- Temporary Popup Notifications -->
 {% if reminders %}
 <div id="notifPopup" class="position-fixed top-0 end-0 p-3" style="z-index: 1080;">
-    <div class="toast show" role="alert" aria-live="assertive" aria-atomic="true">
+    <div class="toast show" role="alert" aria-live="assertive" aria-atomic="    e">
         <div class="toast-header bg-warning text-dark">
             <i class="fas fa-bell me-2"></i>
             <strong class="me-auto">Reminders & Notifications</strong>
@@ -211,7 +211,7 @@
                                 <div class="progress-bar bg-{{ 'success' if cert.status == 'complete' else 'warning' if cert.status == 'on-track' else 'info' if cert.status == 'behind' else 'danger' }}" 
                                      role="progressbar" 
                                      style="width: {{ cert.progress_percentage|default(0) }}%">
-                                </div>
+                                </div> 
                             </div>
 
                             <div class="d-flex justify-content-between align-items-center">

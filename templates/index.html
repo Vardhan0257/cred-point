@@ -1,119 +1,123 @@
 {% extends 'base.html' %}
 
-{% block title %}Welcome - CPE Management Platform{% endblock %}
+{% block title %}CredPoint - CPE Management Platform{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-lg-8 mx-auto text-center">
-        <h1 class="display-4 mb-4">
-            <i class="fas fa-shield-alt text-primary me-3"></i>
-            CPE Management Platform
-        </h1>
-        <p class="lead mb-5">
-            Streamline your cybersecurity continuing education tracking across multiple certification authorities
-        </p>
+<div class="hero-container">
+    <div class="hero-content">
+        <i class="fas fa-shield-alt hero-icon"></i>
+        
+        <h1 class="hero-title">CPE Management Platform</h1>
+        
+        <p class="hero-subtitle">Streamline your continuing professional education tracking</p>
         
         {% if not current_user.is_authenticated %}
-            <div class="d-grid gap-2 d-md-block mb-5">
-                <a href="{{ url_for('routes.register_page') }}" class="btn btn-primary btn-lg me-3">
-                    <i class="fas fa-user-plus me-2"></i>Get Started
-                </a>
-                <a href="{{ url_for('routes.login_page') }}" class="btn btn-outline-secondary btn-lg">
-                    <i class="fas fa-sign-in-alt me-2"></i>Login
-                </a>
-            </div>
+        <div class="hero-buttons">
+            <a href="{{ url_for('routes.register_page') }}" class="btn btn-primary btn-lg">
+                <i class="fas fa-user-plus"></i> Create Account
+            </a>
+            <a href="{{ url_for('routes.login_page') }}" class="btn btn-outline-light btn-lg">
+                <i class="fas fa-sign-in-alt"></i> Sign In
+            </a>
+        </div>
         {% else %}
-            <div class="d-grid gap-2 d-md-block mb-5">
-                <a href="{{ url_for('routes.dashboard') }}" class="btn btn-primary btn-lg">
-                    <i class="fas fa-tachometer-alt me-2"></i>Go to Dashboard
-                </a>
-            </div>
+        <div class="hero-buttons">
+            <a href="{{ url_for('routes.dashboard') }}" class="btn btn-primary btn-lg">
+                <i class="fas fa-tachometer-alt"></i> Go to Dashboard
+            </a>
+        </div>
         {% endif %}
     </div>
 </div>
 
-<div class="row g-4">
-    <div class="col-md-6 col-lg-3">
-        <div class="card h-100 border-0 shadow-sm">
-            <div class="card-body text-center">
-                <div class="mb-3">
-                    <i class="fas fa-certificate fa-3x text-primary"></i>
-                </div>
-                <h5 class="card-title">Multi-Authority Support</h5>
-                <p class="card-text">Track CPEs across ISC², EC-Council, CompTIA, OffSec, and more</p>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-6 col-lg-3">
-        <div class="card h-100 border-0 shadow-sm">
-            <div class="card-body text-center">
-                <div class="mb-3">
-                    <i class="fas fa-file-upload fa-3x text-success"></i>
-                </div>
-                <h5 class="card-title">Proof Documentation</h5>
-                <p class="card-text">Upload and manage proof documents for all your activities</p>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-6 col-lg-3">
-        <div class="card h-100 border-0 shadow-sm">
-            <div class="card-body text-center">
-                <div class="mb-3">
-                    <i class="fas fa-chart-line fa-3x text-info"></i>
-                </div>
-                <h5 class="card-title">Progress Tracking</h5>
-                <p class="card-text">Monitor your progress with visual indicators and reminders</p>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-6 col-lg-3">
-        <div class="card h-100 border-0 shadow-sm">
-            <div class="card-body text-center">
-                <div class="mb-3">
-                    <i class="fas fa-download fa-3x text-warning"></i>
-                </div>
-                <h5 class="card-title">Export Reports</h5>
-                <p class="card-text">Generate PDF and CSV reports for compliance</p>
-            </div>
-        </div>
-    </div>
-</div>
+<style>
+.hero-container {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #0f1419 0%, #1a1f26 100%);
+    padding: 2rem;
+}
 
-<div class="row mt-5">
-    <div class="col-lg-8 mx-auto">
-        <div class="card border-0 bg-secondary">
-            <div class="card-body text-center py-5">
-                <h3 class="card-title mb-3">
-                    <i class="fas fa-users text-primary me-2"></i>
-                    Trusted by Cybersecurity Professionals
-                </h3>
-                <p class="card-text lead">
-                    Keep your certifications current and maintain compliance with industry standards. 
-                    Our platform supports all major cybersecurity certification authorities.
-                </p>
-                <div class="row mt-4">
-                    <div class="col-6 col-md-3 mb-3">
-                        <h4 class="text-primary">ISC²</h4>
-                        <small class="text-muted">CISSP, CCSP, SSCP</small>
-                    </div>
-                    <div class="col-6 col-md-3 mb-3">
-                        <h4 class="text-primary">EC-Council</h4>
-                        <small class="text-muted">CEH, ECSA, LPT</small>
-                    </div>
-                    <div class="col-6 col-md-3 mb-3">
-                        <h4 class="text-primary">CompTIA</h4>
-                        <small class="text-muted">Security+, CySA+, CASP+</small>
-                    </div>
-                    <div class="col-6 col-md-3 mb-3">
-                        <h4 class="text-primary">OffSec</h4>
-                        <small class="text-muted">OSCP, OSWE, OSCE</small>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+.hero-content {
+    text-align: center;
+    max-width: 600px;
+}
+
+.hero-icon {
+    font-size: 4rem;
+    color: #0d47a1;
+    display: block;
+    margin-bottom: 2rem;
+}
+
+.hero-title {
+    font-size: 3.5rem;
+    font-weight: bold;
+    color: #f5f5f5;
+    margin-bottom: 1.5rem;
+    letter-spacing: -0.5px;
+}
+
+.hero-subtitle {
+    font-size: 1.2rem;
+    color: #b0b0b0;
+    margin-bottom: 3rem;
+    line-height: 1.8;
+}
+
+.hero-buttons {
+    display: flex;
+    gap: 1.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.btn-lg {
+    padding: 0.75rem 2rem;
+    font-weight: 600;
+    border-radius: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%);
+    color: #fff;
+    border: none;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #0a3d91 0%, #0d47a1 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(13, 71, 161, 0.35);
+    color: #fff;
+}
+
+.btn-outline-light {
+    color: #fff;
+    border: 2px solid #fff;
+    background: transparent;
+}
+
+.btn-outline-light:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border-color: #fff;
+}
+
+@media (max-width: 768px) {
+    .hero-title {
+        font-size: 2.5rem;
+    }
+    
+    .hero-buttons {
+        flex-direction: column;
+    }
+    
+    .btn-lg {
+        width: 100%;
+    }
+}
+</style>
 {% endblock %}
