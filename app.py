@@ -58,6 +58,7 @@ def add_security_headers(response):
 # Session Login Endpoint
 # =====================
 @app.route('/session-login', methods=['POST'])
+@csrf.exempt
 def session_login():
     data = request.get_json()
     id_token = data.get('idToken')
@@ -65,10 +66,28 @@ def session_login():
         return jsonify({'error': 'ID token missing'}), 400
     try:
         decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+        
         # Store minimal session data; do not treat the raw ID token as the canonical session.
         session.permanent = True
         session['firebase_id_token'] = id_token
-        session['uid'] = decoded_token['uid']
+        session['uid'] = uid
+        
+        # Check if this is a new user registration (pending_user in session)
+        from services.models import get_user, create_user
+        
+        if 'pending_user' in session:
+            # New registration - create Firestore user profile
+            pending = session.pop('pending_user')
+            user_data = get_user(uid)
+            
+            if not user_data:
+                # User doesn't exist in Firestore yet, create them
+                create_user(uid, {
+                    'name': pending['name'],
+                    'email': pending['email']
+                })
+        
         return jsonify({'message': 'Login successful'}), 200
     except Exception as e:
         return jsonify({'error': f'Invalid token: {str(e)}'}), 401

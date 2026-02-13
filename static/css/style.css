@@ -470,7 +470,7 @@ button:focus-visible,
 a:focus-visible {
     border-radius: 0.25rem;
 }
-}
+
 
 /* Status badges styling */
 .badge {
@@ -921,3 +921,13 @@ html {
     -webkit-text-fill-color: transparent;
     background-clip: text;
 }
+
+.issue-hidden {
+    position: absolute;
+    top: 0;
+    left: 0;
+    opacity: 0;
+    pointer-events: none;
+    z-index: -1;
+}
+

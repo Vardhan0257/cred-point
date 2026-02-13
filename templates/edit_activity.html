@@ -25,6 +25,7 @@
         </div>
         <div class="form-group">
             {{ form.cpe_points.label }} {{ form.cpe_points(class="form-control") }}
+            <small id="cpe_range_hint" class="text-muted"></small>
         </div>
         <div class="form-group">
             {{ form.activity_type.label }} {{ form.activity_type(class="form-control") }}
@@ -38,15 +39,109 @@
         <div class="form-group">
             {{ form.certification_id.label }} {{ form.certification_id(class="form-control") }}
         </div>
+        <div class="form-group mb-3">
+            <label class="form-label">Authority</label>
+            <input type="text" id="authority_display" class="form-control" readonly>
+        </div>
+        <div class="form-group mb-3" id="group_container" style="display:none;">
+            <label class="form-label">CPE Category</label>
+            <select id="group_select" name="subcategory" class="form-control">
+                <option value="">Select Category</option>
+                <option value="Group A">Group A</option>
+                <option value="Group B">Group B</option>
+            </select>
+        </div>
+
+
         <div class="form-group">
             {{ form.proof_file.label }} {{ form.proof_file(class="form-control-file") }}
-            {% if activity.proof_file %}
-                <p>Current proof: <a href="{{ url_for('static', filename='uploads/' ~ activity.proof_file) }}" target="_blank">View File</a></p>
+            {% if activity.proof_file_url %}
+            <p>Current proof:
+                <a href="{{ activity.proof_file_url }}" target="_blank">View File</a>
+            </p>
             {% endif %}
+
         </div>
 
         <button type="submit" class="btn btn-primary">Save Changes</button>
         <a href="{{ url_for('routes.list_activities') }}" class="btn btn-secondary">Cancel</a>
     </form>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+    const certSelect = document.querySelector("[name='certification_id']");
+    const authorityField = document.getElementById("authority_display");
+    const activityTypeSelect = document.querySelector("[name='activity_type']");
+    const cpeHint = document.getElementById("cpe_range_hint");
+    const groupContainer = document.getElementById("group_container");
+
+    function loadActivityRules(certName){
+        if(!certName){
+            authorityField.value = "";
+            return;
+        }
+
+        fetch(`/api/activity-rules?cert=${certName}`)
+        .then(res => res.json())
+        .then(data => {
+
+            if(!data.found) return;
+
+            authorityField.value = data.authority;
+
+            activityTypeSelect.innerHTML = "";
+            data.activity_types.forEach(type=>{
+                const currentValue = activityTypeSelect.value;
+                activityTypeSelect.innerHTML = "";
+
+                data.activity_types.forEach(type=>{
+                    const opt = document.createElement("option");
+                    opt.value = type;
+                    opt.textContent = type;
+
+                    if(type === currentValue){
+                        opt.selected = true;
+                    }
+
+                    activityTypeSelect.appendChild(opt);
+                });
+            });
+
+            if(data.requires_group){
+                groupContainer.style.display = "block";
+            } else {
+                groupContainer.style.display = "none";
+            }
+
+            activityTypeSelect.onchange = function(){
+                const selected = activityTypeSelect.value;
+                const range = data.cpe_range[selected];
+                if(range){
+                    cpeHint.textContent = `Allowed range: ${range[0]} - ${range[1]} CPE`;
+                }else{
+                    cpeHint.textContent = "";
+                }
+            }
+        })
+    }
+
+    certSelect.addEventListener("change", function(){
+        const certName = this.options[this.selectedIndex].text.toLowerCase();
+        loadActivityRules(certName);
+    });
+
+    //  Auto load on edit page load
+    if(certSelect.value){
+        const certName = certSelect.options[certSelect.selectedIndex].text.toLowerCase();
+        loadActivityRules(certName);
+    }
+
+    const existingSubcategory = "{{ activity.subcategory or '' }}";
+    if(existingSubcategory){
+        document.getElementById("group_select").value = existingSubcategory;
+    }
+
+});
+</script>
 {% endblock %}

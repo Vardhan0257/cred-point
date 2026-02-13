@@ -1,105 +1,118 @@
-{% extends 'base.html' %}
+﻿{% extends 'base.html' %}
 
-{% block title %}CPE Recommendations - {{ certification.name }} - CPE Management Platform{% endblock %}
+{% block title %}CPE Recommendations - CredPoint{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <!-- Header -->
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h2 class="mb-1">
-                    <i class="fas fa-lightbulb text-warning me-2"></i>
-                    CPE Recommendations
-                </h2>
-                <p class="text-muted mb-0">
-                    Real-world activities to help you earn CPEs for {{ certification.name }} ({{ certification.authority }})
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2 class="mb-1"><i class="fas fa-lightbulb text-warning me-2"></i>CPE Recommendations</h2>
+                    <p class="text-muted mb-0">Curated learning opportunities auto-discovered by n8n automation</p>
+                </div>
+                {% if user_authorities %}
+                <div>
+                    <small class="text-muted d-block mb-1">Filtering for your certifications:</small>
+                    {% for authority in user_authorities %}
+                    <span class="badge bg-primary me-1">{{ authority }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="alert alert-info border-0 mb-4">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong>How it works:</strong> These recommendations are automatically collected from cybersecurity RSS feeds. 
+                CPE ranges are estimates only. After completing an activity, submit proof to the relevant authority and 
+                manually log the awarded CPE in your activities.
+            </div>
+
+            {% if recommendations %}
+            <div class="row g-4">
+                {% for rec in recommendations %}
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100 border-0 shadow-sm">
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <span class="badge bg-secondary">{{ rec.activity_type }}</span>
+                                <span class="badge bg-dark ms-1">
+                                    <i class="fas fa-certificate me-1"></i>{{ rec.min_cpe }}{{ rec.max_cpe }} CPE
+                                </span>
+                            </div>
+
+                            <h5 class="card-title mb-2">
+                                <a href="{{ rec.url }}" target="_blank" class="text-decoration-none text-white">
+                                    {{ rec.title }}
+                                </a>
+                            </h5>
+
+                            <p class="card-text text-muted small mb-3">
+                                {{ rec.description[:150] }}{% if rec.description|length > 150 %}...{% endif %}
+                            </p>
+
+                            <div class="mb-3">
+                                <small class="text-muted">
+                                    <i class="fas fa-building me-1"></i>{{ rec.provider }}
+                                </small>
+                            </div>
+
+                           <div class="mb-3">
+                                <small class="text-muted d-block mb-1">Eligible Authorities:</small>
+                                {% for authority in rec.authority_tags %}
+                                <span class="badge bg-success bg-opacity-25 text-success me-1">{{ authority }}</span>
+                                {% endfor %}
+                            </div>
+
+                            <div class="d-flex gap-2">
+                                <a href="{{ rec.url }}" target="_blank" class="btn btn-sm btn-outline-primary flex-grow-1">
+                                    <i class="fas fa-external-link-alt me-1"></i>View Activity
+                                </a>
+                            </div>
+
+                            <div class="mt-3 pt-3 border-top">
+                                <small class="text-muted">
+                                    <i class="fas fa-clock me-1"></i>
+                                    Added {{ rec.created_at.strftime('%b %d, %Y') if rec.created_at else 'Recently' }}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                <h4 class="text-muted">No Recommendations Yet</h4>
+                <p class="text-muted">
+                    Recommendations will appear here once n8n automation starts collecting from RSS feeds.<br>
+                    Check back soon!
                 </p>
             </div>
-
-            <!-- Add Recommendation Button -->
-            <a href="{{ url_for('routes.add_recommendation', cert_id=certification.id) }}" class="btn btn-primary">
-                <i class="fas fa-plus me-1"></i> Add Recommendation
-            </a>
-        </div>
-
-        <div class="card border-0 shadow-sm">
-            <div class="card-header">
-                <h5 class="card-title mb-0">Recommendations for {{ certification.name }}</h5>
-            </div>
-            <div class="card-body">
-                <div class="row mb-3">
-                    <div class="col-md-8">
-                        <p class="mb-0"><strong>Authority:</strong> {{ certification.authority }}</p>
-                        <p class="mb-0"><strong>Required CPEs:</strong> {{ certification.required_cpes }}</p>
-                    </div>
-                    <div class="col-md-4 text-md-end">
-                        <p class="mb-0"><strong>Renewal Date:</strong></p>
-                        <p class="text-muted">
-                            {{ certification.renewal_date.strftime('%B %d, %Y') if certification.renewal_date else 'Not set' }}
-                        </p>
-                    </div>
-                </div>
-
-                <div class="row g-3">
-                    {% if recommendations %}
-                        {% for rec in recommendations %}
-                            <div class="col-md-6">
-                                <div class="card h-100">
-                                    <div class="card-body">
-                                        <h6 class="card-title">{{ rec.title }}</h6>
-                                        <p class="card-text small">{{ rec.description }}</p>
-                                        <div class="mb-2">
-                                            <small class="text-muted"><strong>Source:</strong> {{ rec.provider }}</small><br>
-                                            <small class="text-muted"><strong>Type:</strong> {{ rec.type }}</small><br>
-                                            <small class="text-muted"><strong>Expires:</strong> 
-                                                {% if rec.expires_at %}
-                                                    {{ rec.expires_at }}
-                                                {% else %}
-                                                    Not set
-                                                {% endif %}
-                                            </small>
-                                        </div>
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <small class="text-muted">{{ rec.cpe }} CPEs</small>
-                                            <button 
-                                                class="btn btn-sm btn-outline-primary"
-                                                onclick="logActivity(
-                                                    '{{ rec.title|escape }}',
-                                                    '{{ rec.description|escape }}',
-                                                    '{{ rec.type|escape }}',
-                                                    '{{ rec.cpe }}',
-                                                    '{{ rec.provider|escape }}',
-                                                    '{{ certification.id }}'
-                                                )">
-                                                Log Activity
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        {% endfor %}
-                    {% else %}
-                        <div class="col-12">
-                            <p class="text-muted">No recommendations available.</p>
-                        </div>
-                    {% endif %}
-                </div>
-            </div>
+            {% endif %}
         </div>
     </div>
 </div>
 
-<script>
-function logActivity(title, description, type, cpeValue, provider, certId) {
-    const url = new URL('{{ url_for("routes.add_activity") }}', window.location.origin);
-    url.searchParams.set('prefill_title', title);
-    url.searchParams.set('prefill_description', description);
-    url.searchParams.set('prefill_type', type);
-    url.searchParams.set('prefill_cpe', cpeValue);
-    url.searchParams.set('prefill_provider', provider);
-    url.searchParams.set('prefill_cert', certId);
-    window.location.href = url.toString();
+<style>
+.card {
+    background: var(--card, #1a1f26);
+    transition: transform 0.2s, box-shadow 0.2s;
 }
-</script>
+
+.card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.3) !important;
+}
+
+.card-title a:hover {
+    color: var(--bs-primary) !important;
+}
+
+.badge {
+    font-weight: 500;
+    padding: 0.35em 0.65em;
+}
+</style>
 {% endblock %}

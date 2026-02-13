@@ -15,23 +15,553 @@ from services.models import (
 )
 from forms import RegistrationForm, LoginForm, CertificateForm, ActivityForm, UpdateProfileForm, AddRecommendationForm, EditRecommendationForm, NewsletterEventForm
 from datetime import datetime, date
-from utils import generate_csv_report, generate_pdf_report, normalize_cert, normalize_activity, get_secure_file_url, build_dashboard_data
-from recommendation_engine import generate_recommendations
-from verification_engine import verify_activities
-from pdf_generator import generate_cpe_report
+from core.utils import generate_csv_report, generate_pdf_report, normalize_cert, normalize_activity, get_secure_file_url, build_dashboard_data
+def evaluate_group_a_compliance(uid, cert):
+    """
+    Evaluates ISC2 Group A minimum compliance for a given certification.
+    Returns dict with totals and compliance status.
+    """
+
+    cert_name_norm = normalize_cert(cert.get("name", ""))
+    cert_rules = MASTER_CERT_DB.get(cert_name_norm, {})
+
+    group_a_min = cert_rules.get("group_a_min")
+    if not group_a_min:
+        return None  # Not applicable
+
+    renewal_years = cert_rules.get("renewal_years", 3)
+
+    # Determine cycle start (issue_date)
+    issue_date_str = cert.get("issue_date")
+    if not issue_date_str:
+        return None
+
+    try:
+        issue_date = datetime.fromisoformat(issue_date_str)
+    except Exception:
+        return None
+
+    cycle_end = issue_date.replace(year=issue_date.year + renewal_years)
+
+    activities = get_user_activities(uid) or []
+
+    total_cpe = 0
+    group_a_total = 0
+
+    for a in activities:
+        if str(a.get("certification_id")) != str(cert.get("id")):
+            continue
+
+        date_str = a.get("activity_date")
+        if not date_str:
+            continue
+
+        try:
+            act_date = datetime.fromisoformat(date_str)
+        except Exception:
+            continue
+
+        if issue_date <= act_date <= cycle_end:
+            cpe = float(a.get("cpe_points") or 0)
+            total_cpe += cpe
+
+            if a.get("subcategory") == "Group A":
+                group_a_total += cpe
+
+    return {
+        "total_cpe": total_cpe,
+        "group_a_total": group_a_total,
+        "group_a_required": group_a_min,
+        "group_a_remaining": max(group_a_min - group_a_total, 0),
+        "is_group_a_compliant": group_a_total >= group_a_min
+    }
+
+def evaluate_annual_compliance(uid, cert):
+    cert_name_norm = normalize_cert(cert.get("name"))
+    rules = MASTER_CERT_DB.get(cert_name_norm, {})
+    annual_min = rules.get("annual_min")
+
+    if not annual_min:
+        return None
+
+    existing_activities = get_user_activities(uid) or []
+
+    yearly_totals = {}
+
+    for a in existing_activities:
+        if str(a.get("certification_id")) != str(cert.get("id")):
+            continue
+
+        date_str = a.get("activity_date")
+        if not date_str:
+            continue
+
+        try:
+            year = datetime.fromisoformat(date_str).year
+        except Exception:
+            continue
+
+        yearly_totals.setdefault(year, 0)
+        yearly_totals[year] += float(a.get("cpe_points") or 0)
+
+    yearly_status = {}
+
+    for year, total in yearly_totals.items():
+        yearly_status[year] = {
+            "total": total,
+            "required": annual_min,
+            "remaining": max(annual_min - total, 0),
+            "is_compliant": total >= annual_min
+        }
+
+    return yearly_status
+
+from core.recommendation_engine import generate_recommendations
+from core.verification_engine import verify_activities
+from core.pdf_generator import generate_cpe_report
 from werkzeug.utils import secure_filename
 from uuid import uuid4
 from google.cloud.firestore import FieldFilter
-from app import limiter
 import os
 import mimetypes
 
 
 routes_bp = Blueprint('routes', __name__)
 
+# Import limiter after Blueprint creation to avoid circular import
+from app import limiter
+
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'pdf'}
 MAX_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
 SAFE_MIME_TYPES = {'image/png', 'image/jpeg', 'application/pdf'}
+
+
+MASTER_CERT_DB = {
+
+    # ================= ISC² =================
+    "cissp": {
+        "authority": "ISC2",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 120,
+        "group_a_min": 90
+    },
+
+    "ccsp": {
+        "authority": "ISC2",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 120
+    },
+    "sscp": {
+        "authority": "ISC2",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 60
+    },
+    "cap": {
+        "authority": "ISC2",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 60
+    },
+    "csslp": {
+        "authority": "ISC2",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 90
+    },
+    "hcispp": {
+        "authority": "ISC2",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 60
+    },
+    # ISC² concentrations (tied to CISSP)
+    "issap": {
+        "authority": "ISC2",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 20
+    },
+    "issep": {
+        "authority": "ISC2",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 20
+    },
+    "issmp": {
+        "authority": "ISC2",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 20
+    },
+
+    # ================= EC-COUNCIL =================
+    "ceh": {
+        "authority": "EC-Council",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 120
+    },
+    "chfi": {
+        "authority": "EC-Council",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 120
+    },
+    "ecsa": {
+        "authority": "EC-Council",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 120
+    },
+    "cnd": {
+        "authority": "EC-Council",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 120
+    },
+    "cpent": {
+        "authority": "EC-Council",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 120
+    },
+    "lpt": {
+        "authority": "EC-Council",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 120
+    },
+    "cct": {
+        "authority": "EC-Council",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 120
+    },
+
+    # ================= COMPTIA =================
+    "security+": {
+        "authority": "CompTIA",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 50
+    },
+    "cysa+": {
+        "authority": "CompTIA",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 60
+    },
+    "pentest+": {
+        "authority": "CompTIA",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 60
+    },
+    "casp+": {
+        "authority": "CompTIA",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 75
+    },
+    "network+": {
+        "authority": "CompTIA",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 30
+    },
+    "a+": {
+        "authority": "CompTIA",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 20
+    },
+
+    # ================= ISACA =================
+    "cisa": {
+        "authority": "ISACA",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 120,
+        "annual_min": 20
+    },
+    "cism": {
+        "authority": "ISACA",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 120,
+        "annual_min": 20
+    },
+    "crisc": {
+        "authority": "ISACA",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 120,
+        "annual_min": 20
+    },
+    "cgeit": {
+        "authority": "ISACA",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 120,
+        "annual_min": 20
+    },
+    "cdpse": {
+        "authority": "ISACA",
+        "renewal_type": "cpe",
+        "renewal_years": 3,
+        "total_cpes": 120,
+        "annual_min": 20
+    },
+
+    # ================= GIAC =================
+    "gsec": {
+        "authority": "GIAC",
+        "renewal_type": "cpe",
+        "renewal_years": 4,
+        "total_cpes": 36
+    },
+    "gcih": {
+        "authority": "GIAC",
+        "renewal_type": "cpe",
+        "renewal_years": 4,
+        "total_cpes": 36
+    },
+    "gcia": {
+        "authority": "GIAC",
+        "renewal_type": "cpe",
+        "renewal_years": 4,
+        "total_cpes": 36
+    },
+    "gpen": {
+        "authority": "GIAC",
+        "renewal_type": "cpe",
+        "renewal_years": 4,
+        "total_cpes": 36
+    },
+    "gwapt": {
+        "authority": "GIAC",
+        "renewal_type": "cpe",
+        "renewal_years": 4,
+        "total_cpes": 36
+    },
+    "grem": {
+        "authority": "GIAC",
+        "renewal_type": "cpe",
+        "renewal_years": 4,
+        "total_cpes": 36
+    },
+    "gced": {
+        "authority": "GIAC",
+        "renewal_type": "cpe",
+        "renewal_years": 4,
+        "total_cpes": 36
+    },
+}
+
+# =====================
+# AUTHORITY ACTIVITY RULES (STEP-2)
+# =====================
+AUTHORITY_ACTIVITY_RULES = {
+
+    "ISC2": {
+        "groups": ["Group A", "Group B"],
+        "requires_group": True,
+        "activity_types": [
+            "Training / Course",
+            "Conference",
+            "Webinar",
+            "Teaching",
+            "Publishing",
+            "Self Study",
+            "Work Experience"
+        ],
+        # CPE ranges (not fixed values)
+        "cpe_range": {
+            "Training / Course": [1, 40],
+            "Conference": [1, 16],
+            "Webinar": [1, 8],
+            "Teaching": [1, 20],
+            "Publishing": [5, 40],
+            "Self Study": [1, 10],
+            "Work Experience": [1, 15]
+        }
+    },
+
+    "EC-Council": {
+        "groups": None,
+        "requires_group": False,
+        "activity_types": [
+            "Training",
+            "Conference",
+            "Webinar",
+            "Research",
+            "Teaching",
+            "Certification",
+            "Work Experience"
+        ],
+        "cpe_range": {
+            "Training": [1, 40],
+            "Conference": [1, 16],
+            "Webinar": [1, 8],
+            "Research": [5, 40],
+            "Teaching": [5, 40],
+            "Certification": [10, 120],
+            "Work Experience": [1, 15]
+        }
+    },
+
+    "CompTIA": {
+        "groups": None,
+        "requires_group": False,
+        "activity_types": [
+            "Training",
+            "Work Experience",
+            "Teaching",
+            "Publishing",
+            "Certification"
+        ],
+        "cpe_range": {
+            "Training": [1, 40],
+            "Work Experience": [1, 9],
+            "Teaching": [5, 20],
+            "Publishing": [5, 40],
+            "Certification": [10, 75]
+        }
+    },
+
+    "ISACA": {
+        "groups": None,
+        "requires_group": False,
+        "activity_types": [
+            "Training",
+            "Conference",
+            "Teaching",
+            "Research",
+            "Work Experience"
+        ],
+        "cpe_range": {
+            "Training": [1, 40],
+            "Conference": [1, 16],
+            "Teaching": [5, 40],
+            "Research": [5, 40],
+            "Work Experience": [1, 20]
+        }
+    },
+
+    "GIAC": {
+        "groups": None,
+        "requires_group": False,
+        "activity_types": [
+            "Training",
+            "Conference",
+            "Research",
+            "Certification",
+            "Community Contribution"
+        ],
+        "cpe_range": {
+            "Training": [1, 20],
+            "Conference": [1, 16],
+            "Research": [5, 36],
+            "Certification": [10, 36],
+            "Community Contribution": [1, 10]
+        }
+    }
+}
+
+# =====================
+# ESTIMATED ACTIVITY RANGES
+# =====================
+# These are user-friendly estimates for UI display.
+# NOT compliance rules. Users edit final CPE after authority approval.
+# Derived from handbook guidelines and realistic activity durations.
+ESTIMATED_ACTIVITY_RANGES = {
+    "Training / Course": [2, 8],
+    "Conference": [3, 12],
+    "Webinar": [1, 4],
+    "Teaching": [5, 15],
+    "Publishing": [6, 20],
+    "Self Study": [1, 6],
+    "Work Experience": [4, 20],
+    "Research": [3, 12],
+    "Certification": [5, 30],
+    "Community Contribution": [2, 8],
+    "Training": [2, 8],
+    "Exam": [0, 0]  # Exams don't award CPE in this system
+}
+
+def get_activity_rules(cert_name):
+    cert = MASTER_CERT_DB.get(cert_name)
+    if not cert:
+        return {}
+
+    authority = cert.get("authority")
+    return AUTHORITY_ACTIVITY_RULES.get(authority, {})
+
+def resolve_cert_rules(cert_name):
+    cert_key = normalize_cert(cert_name)
+    cert_rules = MASTER_CERT_DB.get(cert_key, {})
+
+    authority = cert_rules.get("authority")
+    activity_rules = {}
+
+    if authority:
+        normalized_authority = authority.strip().lower()
+
+        for key, rules in AUTHORITY_ACTIVITY_RULES.items():
+            if key.strip().lower() == normalized_authority:
+                activity_rules = rules
+                break
+
+    return {
+        "cert_rules": cert_rules,
+        "activity_rules": activity_rules
+    }
+
+def validate_activity_rules(form, resolved_rules):
+    rules = resolved_rules.get("activity_rules", {})
+    cert_rules = resolved_rules.get("cert_rules", {})
+
+    if not rules:
+        return None
+
+    activity_type = form.activity_type.data
+    cpe_value = float(form.cpe_points.data or 0)
+
+    allowed_range = rules.get("cpe_range", {}).get(activity_type)
+
+    if allowed_range:
+        min_val, max_val = allowed_range
+        if not (min_val <= cpe_value <= max_val):
+            return f"CPE must be between {min_val} and {max_val} for {activity_type}."
+
+    if rules.get("requires_group"):
+        if not form.subcategory.data:
+            return "This certification requires a CPE category (Group A or Group B)."
+
+    return None
+
+def normalize_cert(text):
+    return text.lower().strip()
+def normalize_authority(text):
+    if not text:
+        return ""
+
+    value = text.strip().lower()
+
+    mapping = {
+        "isc2": "ISC2",
+        "isc²": "ISC2",
+        "ec-council": "EC-Council",
+        "eccouncil": "EC-Council",
+        "comptia": "CompTIA",
+        "isaca": "ISACA",
+        "giac": "GIAC"
+    }
+
+    return mapping.get(value, text.strip())
 
 
 def validate_file_upload(file_obj):
@@ -73,6 +603,155 @@ def validate_file_upload(file_obj):
     return True, None
 
 
+# =====================
+# API Endpoints
+# =====================
+@routes_bp.route('/api/cert-search')
+def cert_search():
+    q = normalize_cert(request.args.get("q", ""))
+    if len(q) < 2:
+        return jsonify([])
+
+    matches = [cert.upper() for cert in MASTER_CERT_DB.keys() if cert.startswith(q)]
+    return jsonify(sorted(matches))
+
+
+@routes_bp.route('/api/cert-autofill')
+def cert_autofill():
+    name = normalize_cert(request.args.get("name", ""))
+    data = MASTER_CERT_DB.get(name)
+
+    if not data:
+        return jsonify({"found": False})
+
+    return jsonify({
+        "found": True,
+        "authority": data.get("authority"),
+        "required_cpes": data.get("total_cpes", 0),
+        "renewal_years": data.get("renewal_years"),
+        "renewal_type": data.get("renewal_type")
+    })
+
+@routes_bp.route('/api/activity-rules')
+def activity_rules():
+    cert_name = normalize_cert(request.args.get("cert", ""))
+
+    if not cert_name:
+        return jsonify({"found": False})
+
+    cert_rules = MASTER_CERT_DB.get(cert_name)
+    if not cert_rules:
+        return jsonify({"found": False})
+
+    authority = cert_rules.get("authority")
+    rules = AUTHORITY_ACTIVITY_RULES.get(authority)
+
+    if not rules:
+        return jsonify({"found": False})
+
+    return jsonify({
+        "found": True,
+        "authority": authority,
+        "activity_types": rules.get("activity_types"),
+        "cpe_range": rules.get("cpe_range"),
+        "requires_group": rules.get("requires_group"),
+        "groups": rules.get("groups")
+    })
+
+
+# =====================
+# PROJECTION ENGINE
+# =====================
+def calculate_activity_projection(uid, activity_type):
+    """
+    Calculate estimated CPE ranges for a user across all their certifications.
+    
+    Uses realistic estimates from ESTIMATED_ACTIVITY_RANGES (UX estimates).
+    Still validates that activity_type is allowed by each certification's authority.
+    
+    Args:
+        uid: User ID
+        activity_type: Activity type string
+    
+    Returns:
+        list: [{"cert": "CISSP", "min": 2, "max": 8}, ...]
+              Returns certifications where this activity type is eligible.
+    """
+    if not activity_type or not isinstance(activity_type, str):
+        return []
+    
+    activity_type = activity_type.strip()
+    if not activity_type:
+        return []
+    
+    # Get the estimated range for this activity type
+    estimated_range = ESTIMATED_ACTIVITY_RANGES.get(activity_type)
+    if not estimated_range:
+        return []
+    
+    min_est, max_est = estimated_range
+    
+    certifications = get_user_certificates(uid) or []
+    ranges = []
+    
+    for cert in certifications:
+        cert_name = cert.get("name", "")
+        if not cert_name:
+            continue
+        
+        cert_name_norm = normalize_cert(cert_name)
+        cert_rules = MASTER_CERT_DB.get(cert_name_norm)
+        
+        if not cert_rules:
+            continue
+        
+        authority = cert_rules.get("authority")
+        if not authority:
+            continue
+        
+        # Find matching authority rules
+        authority_rules = None
+        for auth_key, auth_val in AUTHORITY_ACTIVITY_RULES.items():
+            if auth_key.lower() == authority.lower():
+                authority_rules = auth_val
+                break
+        
+        if not authority_rules:
+            continue
+        
+        # Check if activity type is allowed by this certification's authority
+        allowed_types = authority_rules.get("activity_types", [])
+        if activity_type not in allowed_types:
+            continue
+        
+        # Activity type is eligible for this certification
+        # Use estimated range for display
+        ranges.append({
+            "cert": cert_name,
+            "min": min_est,
+            "max": max_est
+        })
+    
+    return ranges
+
+
+@routes_bp.route('/api/activity-projection', methods=['GET'])
+@firebase_required
+def activity_projection():
+    """
+    Return estimated CPE ranges for user's certifications.
+    Query params: activity_type
+    """
+    uid = g.uid
+    activity_type = request.args.get("activity_type", "").strip()
+    
+    if not activity_type:
+        return jsonify({"ranges": []})
+    
+    ranges = calculate_activity_projection(uid, activity_type)
+    
+    return jsonify({"ranges": ranges})
+
 
 # =====================
 # Public Pages
@@ -99,20 +778,24 @@ def register_page():
     if request.method == 'POST':
         if form.validate_on_submit():
             try:
-                user_rec = auth.create_user(
-                    email=form.email.data,
-                    password=form.password.data
-                )
-                create_user(user_rec.uid, {
+                # Firebase user creation happens on client side
+                # Here we just create the Firestore user profile
+                # Extract uid from Firebase ID token (client sends it via /session-login)
+                # For now, we'll create a placeholder - the actual uid will be set by the session login
+                
+                # Store user data temporarily in session to be picked up after Firebase auth
+                session['pending_user'] = {
                     'name': form.name.data,
                     'email': form.email.data
-                })
-                flash('Account created successfully. Please log in.', 'success')
-                return redirect(url_for('routes.login_page'))
+                }
+                
+                return jsonify({'status': 'ready_for_firebase'}), 200
             except Exception as e:
-                flash(f'Error creating account: {str(e)}', 'danger')
+                return jsonify({'error': str(e)}), 400
         else:
-            flash('Please fix the errors in the form.', 'danger')
+            errors = {field: messages[0] for field, messages in form.errors.items()}
+            return jsonify({'error': 'Validation failed', 'errors': errors}), 400
+    
     return render_template('register.html', form=form)
 
 @routes_bp.route('/logout', methods=['GET'], endpoint='logout')
@@ -135,6 +818,23 @@ def dashboard_page():
         certifications_raw,
         all_activities_raw
     )
+    # Attach Group A compliance (ISC2 only)
+    for cert in certifications:
+        try:
+            compliance = evaluate_group_a_compliance(uid, cert)
+            if compliance:
+                cert["group_a_compliance"] = compliance
+        except Exception as e:
+            current_app.logger.error(f"Group A evaluation failed: {e}")
+
+    # Attach annual compliance (ISACA)
+    for cert in certifications:
+        try:
+            annual_status = evaluate_annual_compliance(uid, cert)
+            if annual_status:
+                cert["annual_compliance"] = annual_status
+        except Exception as e:
+            current_app.logger.error(f"Annual evaluation failed: {e}")
 
     return render_template(
         'dashboard.html',
@@ -151,25 +851,58 @@ def dashboard_page():
 @routes_bp.route('/certificates', methods=['GET'], endpoint='list_certificates')
 @firebase_required
 def list_certificates():
-    certs_raw = get_user_certificates(g.uid) or []
-    certs = [normalize_cert(c) for c in certs_raw]
-    return render_template('certifications.html', certifications=certs)
+    certs = get_user_certificates(g.uid) or []
+    return render_template(
+        'certifications.html',
+        certifications=certs
+    )
 
-@routes_bp.route('/certificates/new', methods=['GET', 'POST'], endpoint='add_certification')
+@routes_bp.route("/certificates/new", methods=["GET", "POST"])
 @firebase_required
 def add_certification():
     form = CertificateForm()
-    if request.method == 'POST' and form.validate_on_submit():
-        data = {
-            'name': form.name.data,
-            'authority': form.authority.data,
-            'required_cpes': form.required_cpes.data,
-            'renewal_date': form.renewal_date.data.isoformat() if form.renewal_date.data else None
+
+    if request.method == "POST":
+        if not form.validate():
+            flash("Form validation failed.", "danger")
+            return render_template("add_certification.html", form=form, certification=None)
+
+        # 🔥 MANUAL DATE PARSING (DD/MM/YYYY)
+        issue_date_raw = request.form.get("issue_date")
+        renewal_date_raw = request.form.get("renewal_date")
+
+        try:
+            issue_date = (
+                datetime.strptime(issue_date_raw, "%d/%m/%Y")
+                if issue_date_raw else None
+            )
+            renewal_date = (
+                datetime.strptime(renewal_date_raw, "%Y-%m-%d")
+                if renewal_date_raw else None
+            )
+        except ValueError:
+            flash("Invalid date format. Use DD/MM/YYYY.", "danger")
+            return render_template("add_certification.html", form=form, certification=None)
+
+        cert_data = {
+            "name": form.name.data.strip(),
+            "authority": form.authority.data,
+            "required_cpes": int(form.required_cpes.data),
+            "issue_date": issue_date.isoformat() if issue_date else None,
+            "renewal_date": renewal_date.isoformat() if renewal_date else None,
+            "created_at": datetime.utcnow()
         }
-        create_certificate(g.uid, data)
-        flash('Certification added successfully!', 'success')
-        return redirect(url_for('routes.list_certificates'))
-    return render_template('add_certification.html', form=form, certification=None)
+
+        create_certificate(g.uid, cert_data)
+        flash("Certification added successfully!", "success")
+        return redirect(url_for("routes.list_certificates"))
+
+    return render_template(
+        "add_certification.html",
+        form=form,
+        certification=None
+    )
+
 
 @routes_bp.route('/certificates/<cert_id>/recommendations', methods=['GET'], endpoint='get_recommendations')
 @firebase_required
@@ -187,9 +920,9 @@ def get_recommendations(cert_id):
         current_app.logger.error(f"Error generating recommendations for cert {cert_id}: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
       
-@routes_bp.route('/certificates/<cert_id>/recommendations-page', methods=['GET'], endpoint='recommendations_page')
+@routes_bp.route('/certificates/<cert_id>/recommendations-page', methods=['GET'], endpoint='cert_recommendations_page')
 @firebase_required
-def recommendations_page(cert_id):
+def cert_recommendations_page(cert_id):
     uid = g.uid
     certs_raw = get_user_certificates(uid) or []
     cert = next((c for c in certs_raw if str(c.get('id')) == str(cert_id)), None)
@@ -275,47 +1008,21 @@ def list_activities():
 @routes_bp.route('/activities/new', methods=['GET', 'POST'], endpoint='add_activity')
 @firebase_required
 def add_activity():
-    uid = g.uid
+    """
+    Activity-centric logging system.
+    User logs activity independently of certifications.
+    CPE projections are calculated in frontend for UX only.
+    Final CPE awarded manually after authority approval.
+    """
+    uid = g.uid 
     form = ActivityForm()
+    
+    # Populate activity type choices from estimated ranges
+    activity_type_choices = sorted([t for t in ESTIMATED_ACTIVITY_RANGES.keys() if ESTIMATED_ACTIVITY_RANGES[t][0] > 0])
+    form.activity_type.choices = [('', '----- Select Activity Type -----')] + [(t, t) for t in activity_type_choices]
 
-    # Populate certification choices dynamically
-    certifications = get_user_certificates(uid) or []
-    form.certification_id.choices = [
-        (str(c.get('id') or ''), c.get('name') or 'Unnamed')
-        for c in certifications
-    ]
-
-    # -------------------------------
-    # Prefill form from URL params
-    # -------------------------------
-    if request.method == 'GET' and request.args:
-        pre_title = request.args.get('prefill_title')
-        pre_desc = request.args.get('prefill_description')
-        pre_type = request.args.get('prefill_type')
-        pre_cpe = request.args.get('prefill_cpe')
-        pre_provider = request.args.get('prefill_provider')
-        pre_cert = request.args.get('prefill_cert')
-
-        if pre_title:
-            form.title.data = pre_title
-        if pre_desc:
-            form.description.data = pre_desc
-        if pre_type:
-            form.activity_type.data = pre_type
-        if pre_provider:
-            form.provider.data = pre_provider
-        if pre_cpe:
-            try:
-                form.cpe_points.data = int(float(pre_cpe))
-            except Exception:
-                form.cpe_points.data = None
-        if pre_cert:
-            form.certification_id.data = str(pre_cert)
-
-    # -------------------------------
-    # Handle form submit
-    # -------------------------------
     if request.method == 'POST' and form.validate_on_submit():
+        # File upload (optional)
         proof_file_name = None
         if form.proof_file.data:
             uploaded_file = form.proof_file.data
@@ -327,35 +1034,35 @@ def add_activity():
                 return render_template('add_activity.html', form=form)
             
             filename = secure_filename(uploaded_file.filename)
-            unique_name = f"{g.uid}/{uuid4().hex}_{filename}"
+            unique_name = f"{uid}/{uuid4().hex}_{filename}"
             
             # Upload to Firebase Storage
-            bucket = storage.bucket() # Uses default bucket from firebase_config
-            blob = bucket.blob(f"proofs/{unique_name}")
-            blob.upload_from_file(uploaded_file, content_type=uploaded_file.content_type)
-            # SECURITY: Do NOT make public. Store path only.
-            proof_file_name = blob.name
-
+            try:
+                bucket = storage.bucket()
+                blob = bucket.blob(f"proofs/{unique_name}")
+                blob.upload_from_file(uploaded_file, content_type=uploaded_file.content_type)
+                proof_file_name = blob.name
+            except Exception as e:
+                current_app.logger.error(f"Storage upload failed: {e}")
+                flash('File upload failed. Please check storage configuration or try again without a file.', 'danger')
+                return render_template('add_activity.html', form=form)
+        
+        # Build activity data - minimal and clean
         activity_data = {
             'title': form.title.data,
             'provider': form.provider.data,
-            'cpe_points': float(form.cpe_points.data or 0),
             'activity_type': form.activity_type.data,
             'description': form.description.data,
             'activity_date': form.activity_date.data.isoformat() if form.activity_date.data else None,
-            'certification_id': form.certification_id.data,
             'proof_file': proof_file_name,
-            'user_id': uid
+            'user_id': uid,
+            'awarded_cpe': None,
+            'status': 'draft',
+            'created_at': datetime.utcnow()
         }
-
-        # CPE metadata
-        activity_data['duration_hours'] = float(form.duration_hours.data) if form.duration_hours.data else None
-        activity_data['submission_source'] = form.submission_source.data or 'internal'
-        activity_data['subcategory'] = form.subcategory.data or None
-        activity_data['submitted_at'] = datetime.utcnow()
-
+        
         create_activity(uid, activity_data)
-        flash('Activity added successfully!', 'success')
+        flash('Activity logged successfully!', 'success')
         return redirect(url_for('routes.list_activities'))
 
     return render_template('add_activity.html', form=form)
@@ -363,9 +1070,14 @@ def add_activity():
 @routes_bp.route('/activities/<activity_id>/edit', methods=['GET', 'POST'], endpoint='edit_activity')
 @firebase_required
 def edit_activity(activity_id):
+    """
+    Edit activity details (not CPE awards).
+    CPE awards are handled separately via a different interface.
+    Simplified to only update basic activity fields without authority validation.
+    """
     uid = g.uid
 
-    # Fetch all activities and find the one with this ID
+    # Fetch activity
     raw_activities = get_user_activities(uid) or []
     activity = next((a for a in raw_activities if str(a.get('id')) == str(activity_id)), None)
     if not activity:
@@ -374,60 +1086,49 @@ def edit_activity(activity_id):
 
     activity = normalize_activity(activity)
     form = ActivityForm()
-
-    # Populate certification choices dynamically
-    certifications = get_user_certificates(uid) or []
-    form.certification_id.choices = [
-        (str(c.get('id') or c.get('cert_id') or ''), c.get('name') or 'Unnamed')
-        for c in certifications
-    ]
+    
+    # Populate activity type choices
+    activity_type_choices = sorted([t for t in ESTIMATED_ACTIVITY_RANGES.keys() if ESTIMATED_ACTIVITY_RANGES[t][0] > 0])
+    form.activity_type.choices = [('', '----- Select Activity Type -----')] + [(t, t) for t in activity_type_choices]
 
     if request.method == 'GET':
         # Prefill form with existing data
         form.title.data = activity.get('title')
         form.provider.data = activity.get('provider')
-        form.cpe_points.data = activity.get('cpe_points')
         form.activity_type.data = activity.get('activity_type')
         form.description.data = activity.get('description')
         if activity.get('date_obj'):
             form.activity_date.data = activity['date_obj'].date()
-        form.certification_id.data = activity.get('certification_id')
 
     if request.method == 'POST' and form.validate_on_submit():
-        proof_file_name = activity.get('proof_file')  # keep old proof file if not changed
+        # File upload (optional - use existing if not changed)
+        proof_file_name = activity.get('proof_file')
         if form.proof_file.data:
             uploaded_file = form.proof_file.data
             
-            # Validate file before upload
             is_valid, error_msg = validate_file_upload(uploaded_file)
             if not is_valid:
                 flash(f'File upload error: {error_msg}', 'danger')
                 return render_template('edit_activity.html', form=form, activity=activity)
             
             filename = secure_filename(uploaded_file.filename)
-            unique_name = f"{g.uid}/{uuid4().hex}_{filename}"
+            unique_name = f"{uid}/{uuid4().hex}_{filename}"
             
-            bucket = storage.bucket()
+            bucket = storage.bucket('credpoint-16422.appspot.com''credpoint-16422.appspot.com')
             blob = bucket.blob(f"proofs/{unique_name}")
             blob.upload_from_file(uploaded_file, content_type=uploaded_file.content_type)
-            # SECURITY: Do NOT make public. Store path only.
             proof_file_name = blob.name
 
+        # Update only basic activity data
         updated_data = {
             'title': form.title.data,
             'provider': form.provider.data,
-            'cpe_points': float(form.cpe_points.data or 0),
             'activity_type': form.activity_type.data,
             'description': form.description.data,
             'activity_date': form.activity_date.data.isoformat() if form.activity_date.data else None,
-            'certification_id': form.certification_id.data,
             'proof_file': proof_file_name,
-            'duration_hours': float(form.duration_hours.data) if form.duration_hours.data else None,
-            'submission_source': form.submission_source.data or 'internal',
-            'subcategory': form.subcategory.data or None
         }
 
-        # We’ll need an update function in models.py — but for now use create_activity with same ID if your storage supports overwrite
         from services.models import update_activity
         update_activity(uid, activity_id, updated_data)
 
@@ -791,11 +1492,16 @@ def profile_page():
                 ext = filename.rsplit('.', 1)[-1].lower()
                 if ext in ALLOWED_EXTENSIONS:
                     blob_path = f"profiles/{uid}_{int(datetime.utcnow().timestamp())}.{ext}"
-                    bucket = storage.bucket()
-                    blob = bucket.blob(blob_path)
-                    blob.upload_from_file(file, content_type=file.content_type)
-                    # SECURITY: Store path, not public URL
-                    update_data["profile_image"] = blob.name
+                    try:
+                        bucket = storage.bucket()
+                        blob = bucket.blob(blob_path)
+                        blob.upload_from_file(file, content_type=file.content_type)
+                        # SECURITY: Store path, not public URL
+                        update_data["profile_image"] = blob.name
+                    except Exception as e:
+                        current_app.logger.error(f"Profile image upload failed: {e}")
+                        flash('Profile image upload failed. Please check storage configuration.', 'danger')
+                        return redirect(url_for('routes.profile_page'))
 
         if update_data:
             update_data["updated_at"] = datetime.utcnow()
@@ -985,3 +1691,213 @@ def delete_newsletter(event_id):
     delete_event(event_id)
     flash('Event deleted successfully!', 'success')
     return redirect(url_for('routes.my_newsletter'))
+# Add this to the END of routes.py (after all existing routes)
+
+# =====================
+# n8n Webhook Routes
+# =====================
+
+@routes_bp.route('/webhook/n8n/recommendations', methods=['POST'])
+def webhook_recommendations():
+    """
+    Receive recommendations from n8n automation workflows.
+    No authentication required (public webhook).
+    """
+    data = request.json or {}
+    items = data.get("items", [])
+
+    if not items:
+        return jsonify({"status": "error", "message": "No items provided"}), 400
+
+    try:
+        for item in items:
+            db.collection("recommendations").add({
+                "title": item.get("title", ""),
+                "description": item.get("description", ""),
+                "url": item.get("url", ""),
+                "provider": item.get("provider", "RSS Feed"),
+                "authority_tags": item.get("authority_tags", ["ISC2", "CompTIA", "EC-Council", "GIAC", "ISACA"]),
+                "activity_type": item.get("activity_type", "Conference"),
+                "min_cpe": item.get("min_cpe", 1),
+                "max_cpe": item.get("max_cpe", 4),
+                "expires_at": item.get("expires_at"),
+                "source": "n8n",
+                "created_at": datetime.utcnow(),
+                "approved": True
+            })
+        
+        current_app.logger.info(f"n8n webhook: Added {len(items)} recommendations")
+        return jsonify({"status": "ok", "imported": len(items)})
+    
+    except Exception as e:
+        current_app.logger.error(f"n8n webhook error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@routes_bp.route('/webhook/n8n/events', methods=['POST'])
+def webhook_events():
+    """
+    Receive events from n8n automation workflows.
+    No authentication required (public webhook).
+    """
+    data = request.json or {}
+    items = data.get("items", [])
+
+    if not items:
+        return jsonify({"status": "error", "message": "No items provided"}), 400
+
+    try:
+        for item in items:
+            db.collection("events").add({
+                "title": item.get("title", ""),
+                "description": item.get("description", ""),
+                "date": item.get("date", datetime.utcnow().isoformat()),
+                "link": item.get("link", ""),
+                "location": item.get("location", "Online"),
+                "tags": item.get("tags", ["webinar"]),
+                "source": "n8n",
+                "created_at": datetime.utcnow(),
+                "created_by_uid": None  # System-generated
+            })
+        
+        current_app.logger.info(f"n8n webhook: Added {len(items)} events")
+        return jsonify({"status": "ok", "imported": len(items)})
+    
+    except Exception as e:
+        current_app.logger.error(f"n8n webhook error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# =====================
+# Public API Routes for Recommendations & Events
+# =====================
+
+@routes_bp.route('/api/recommendations/latest', methods=['GET'])
+def api_recommendations_latest():
+    """
+    Public API endpoint: Get latest approved recommendations.
+    Can be filtered by authority tag.
+    """
+    try:
+        limit = int(request.args.get('limit', 20))
+        authority = request.args.get('authority', None)
+        
+        query = db.collection("recommendations").where("approved", "==", True)
+        
+        if authority:
+            query = query.where("authority_tags", "array_contains", authority)
+        
+        query = query.order_by("created_at", direction=firestore.Query.DESCENDING).limit(limit)
+        
+        docs = query.stream()
+        recommendations = []
+        
+        for doc in docs:
+            rec = doc.to_dict()
+            rec['id'] = doc.id
+            recommendations.append(rec)
+        
+        return jsonify({"recommendations": recommendations})
+    
+    except Exception as e:
+        current_app.logger.error(f"API error fetching recommendations: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@routes_bp.route('/api/events/latest', methods=['GET'])
+def api_events_latest():
+    """
+    Public API endpoint: Get latest upcoming events.
+    """
+    try:
+        limit = int(request.args.get('limit', 20))
+        
+        query = db.collection("events").order_by("created_at", direction=firestore.Query.DESCENDING).limit(limit)
+        
+        docs = query.stream()
+        events = []
+        
+        for doc in docs:
+            evt = doc.to_dict()
+            evt['id'] = doc.id
+            events.append(evt)
+        
+        return jsonify({"events": events})
+    
+    except Exception as e:
+        current_app.logger.error(f"API error fetching events: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+# =====================
+# UI Routes for Recommendations & Events Pages
+# =====================
+
+@routes_bp.route('/recommendations', methods=['GET'], endpoint='recommendations_page')
+@firebase_required
+def recommendations_page():
+    """
+    Display recommendations filtered by user's certifications.
+    """
+    uid = g.uid
+    
+    # Get user's certifications to determine relevant authorities
+    user_certs = get_user_certificates(uid) or []
+    authorities = set()
+    
+    for cert in user_certs:
+        cert_name = normalize_cert(cert.get("name", ""))
+        cert_info = MASTER_CERT_DB.get(cert_name, {})
+        authority = cert_info.get("authority")
+        if authority:
+            authorities.add(authority)
+    
+    # Fetch recommendations
+    try:
+        query = db.collection("recommendations").where("approved", "==", True).order_by("created_at", direction=firestore.Query.DESCENDING).limit(50)
+        
+        docs = query.stream()
+        all_recommendations = []
+        
+        for doc in docs:
+            rec = doc.to_dict()
+            rec['id'] = doc.id
+            
+            # Filter by user's authorities
+            rec_authorities = set(rec.get("authority_tags", []))
+            if authorities and rec_authorities.intersection(authorities):
+                all_recommendations.append(rec)
+            elif not authorities:  # Show all if user has no certs
+                all_recommendations.append(rec)
+        
+        return render_template('recommendations.html', recommendations=all_recommendations, user_authorities=list(authorities))
+    
+    except Exception as e:
+        current_app.logger.error(f"Error loading recommendations: {e}")
+        flash("Error loading recommendations. Please try again.", "danger")
+        return render_template('recommendations.html', recommendations=[], user_authorities=[])
+
+
+@routes_bp.route('/events', methods=['GET'], endpoint='events_page')
+@firebase_required
+def events_page():
+    """
+    Display all upcoming cybersecurity events.
+    """
+    try:
+        query = db.collection("events").order_by("created_at", direction=firestore.Query.DESCENDING).limit(50)
+        
+        docs = query.stream()
+        events = []
+        
+        for doc in docs:
+            evt = doc.to_dict()
+            evt['id'] = doc.id
+            events.append(evt)
+        
+        return render_template('events.html', events=events)
+    
+    except Exception as e:
+        current_app.logger.error(f"Error loading events: {e}")
+        flash("Error loading events. Please try again.", "danger")
+        return render_template('events.html', events=[])

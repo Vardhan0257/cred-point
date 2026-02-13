@@ -1,75 +1,210 @@
 {% extends 'base.html' %}
-{% block title %}Register - CPE Management Platform{% endblock %}
+{% block title %}Register - CredPoint{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-6 col-lg-5">
-        <div class="card border-0 shadow">
-            <div class="card-body p-5">
-                <div class="text-center mb-4">
-                    <i class="fas fa-user-plus fa-3x text-primary mb-3"></i>
-                    <h2 class="card-title">Create Account</h2>
-                    <p class="text-muted">Join the CPE management platform</p>
-                </div>
 
-                <form method="POST">
-                    {{ form.hidden_tag() }}
+<div class="register-wrapper">
 
-                    <div class="mb-3">
-                        {{ form.name.label(class="form-label") }}
-                        {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
-                        {% if form.name.errors %}
-                        <div class="invalid-feedback">
-                            {% for error in form.name.errors %}{{ error }}{% endfor %}
-                        </div>
-                        {% endif %}
-                    </div>
+<div class="register-card">
 
-                    <div class="mb-3">
-                        {{ form.email.label(class="form-label") }}
-                        {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else "")) }}
-                        {% if form.email.errors %}
-                        <div class="invalid-feedback">
-                            {% for error in form.email.errors %}{{ error }}{% endfor %}
-                        </div>
-                        {% endif %}
-                    </div>
-
-                    <div class="mb-3">
-                        {{ form.password.label(class="form-label") }}
-                        {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else "")) }}
-                        {% if form.password.errors %}
-                        <div class="invalid-feedback">
-                            {% for error in form.password.errors %}{{ error }}{% endfor %}
-                        </div>
-                        {% endif %}
-                    </div>
-
-                    <div class="mb-4">
-                        {{ form.confirm_password.label(class="form-label") }}
-                        {{ form.confirm_password(class="form-control" + (" is-invalid" if form.confirm_password.errors else "")) }}
-                        {% if form.confirm_password.errors %}
-                        <div class="invalid-feedback">
-                            {% for error in form.confirm_password.errors %}{{ error }}{% endfor %}
-                        </div>
-                        {% endif %}
-                    </div>
-
-                    <div class="d-grid">
-                        {{ form.submit(class="btn btn-primary btn-lg") }}
-                    </div>
-                </form>
-
-                <hr class="my-4">
-
-                <div class="text-center">
-                    <p class="mb-0">Already have an account?</p>
-                    <a href="{{ url_for('routes.login_page') }}" class="btn btn-outline-secondary">
-                        <i class="fas fa-sign-in-alt me-2"></i>Sign In
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
+<div class="register-header">
+<h2>Create your account</h2>
+<p>Start tracking certifications and CPE activities</p>
 </div>
+
+<form id="register-form" method="POST">
+{{ form.hidden_tag() }}
+
+<div id="register-error" class="alert alert-danger d-none"></div>
+
+<div class="mb-3">
+<label class="form-label">Full Name</label>
+{{ form.name(class="form-control", placeholder="John Doe") }}
+{% for error in form.name.errors %}
+<div class="text-danger small mt-1">{{ error }}</div>
+{% endfor %}
+</div>
+
+<div class="mb-3">
+<label class="form-label">Email</label>
+{{ form.email(class="form-control", placeholder="you@example.com") }}
+{% for error in form.email.errors %}
+<div class="text-danger small mt-1">{{ error }}</div>
+{% endfor %}
+</div>
+
+<div class="mb-3">
+<label class="form-label">Password</label>
+{{ form.password(class="form-control", placeholder="••••••••") }}
+{% for error in form.password.errors %}
+<div class="text-danger small mt-1">{{ error }}</div>
+{% endfor %}
+</div>
+
+<div class="mb-4">
+<label class="form-label">Confirm Password</label>
+{{ form.confirm_password(class="form-control", placeholder="••••••••") }}
+{% for error in form.confirm_password.errors %}
+<div class="text-danger small mt-1">{{ error }}</div>
+{% endfor %}
+</div>
+
+<div class="terms">
+By creating an account you agree to our
+<a href="#">Terms</a> and <a href="#">Privacy Policy</a>
+</div>
+
+<button type="submit" class="btn btn-primary w-100 mt-3">
+Create Account
+</button>
+
+</form>
+
+<div class="register-footer">
+<span>Already have an account?</span>
+<a href="{{ url_for('routes.login_page') }}">Sign in</a>
+</div>
+
+</div>
+</div>
+
+<style>
+
+/* ===== REGISTER PAGE ===== */
+
+.register-wrapper{
+min-height:80vh;
+display:flex;
+align-items:center;
+justify-content:center;
+}
+
+.register-card{
+width:100%;
+max-width:460px;
+background:#11161c;
+border:1px solid #1f242c;
+border-radius:16px;
+padding:42px;
+box-shadow:0 20px 60px rgba(0,0,0,0.45);
+animation:fadeUp .4s ease;
+}
+
+.register-header{
+text-align:center;
+margin-bottom:30px;
+}
+
+.register-header h2{
+font-weight:700;
+margin-bottom:6px;
+}
+
+.register-header p{
+color:#9aa3b2;
+font-size:14px;
+}
+
+.terms{
+font-size:13px;
+color:#9aa3b2;
+text-align:center;
+line-height:1.5;
+}
+
+.terms a{
+color:#fff;
+text-decoration:none;
+}
+
+.terms a:hover{
+color:#8ab4ff;
+}
+
+.register-footer{
+margin-top:26px;
+text-align:center;
+font-size:14px;
+color:#9aa3b2;
+}
+
+.register-footer a{
+color:#fff;
+text-decoration:none;
+margin-left:6px;
+}
+
+.register-footer a:hover{
+color:#8ab4ff;
+}
+
+@keyframes fadeUp{
+from{opacity:0; transform:translateY(20px);}
+to{opacity:1; transform:translateY(0);}
+}
+
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+
+<script>
+const firebaseConfig = {
+    apiKey: "{{ firebase_config.apiKey }}",
+    authDomain: "{{ firebase_config.authDomain }}",
+    projectId: "{{ firebase_config.projectId }}"
+};
+
+firebase.initializeApp(firebaseConfig);
+
+document.getElementById('register-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    
+    const email = document.querySelector('[name="email"]').value;
+    const password = document.querySelector('[name="password"]').value;
+
+    try {
+        // Create Firebase user first
+        const userCredential = await firebase.auth().createUserWithEmailAndPassword(email, password);
+        const token = await userCredential.user.getIdToken();
+
+        // Then submit Firestore user data via form
+        const formData = new FormData(this);
+        const response = await fetch(this.action, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            showError('Failed to complete registration. User created but profile setup failed.');
+            return;
+        }
+
+        // Create session with Firebase token
+        const sessionResponse = await fetch('/session-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken: token })
+        });
+
+        if (sessionResponse.ok) {
+            window.location.href = '/dashboard';
+        } else {
+            showError('Session creation failed');
+        }
+    } catch (error) {
+        showError(error.message);
+    }
+});
+
+function showError(message) {
+    const el = document.getElementById('register-error');
+    el.textContent = message;
+    el.classList.remove('d-none');
+}
+</script>
+
 {% endblock %}

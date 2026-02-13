@@ -1,6 +1,47 @@
+# Python
 **/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Virtual Environments
 .local/
 .venv/
-services/__pycache__/
-static/uploads/
+.env/
 venv/
+env/
+
+# Environment Variables
+.env
+
+# Firebase & Config
+config/serviceAccountKey.json
+firebase-debug.log
+firestore-debug.log
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+
+# Backups
+*_backup.html
+*_old_backup.html
+
+# Uploads
+static/uploads/
+
+# OS
+.DS_Store
+Thumbs.db

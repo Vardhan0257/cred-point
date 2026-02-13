@@ -64,50 +64,74 @@ def update_user(uid, updates):
 # ========================
 def create_activity(uid, data):
     """
-    Create an activity doc, normalize fields, increment user credits and recalc cert totals.
+    Create an activity doc. Handles both old (certification-bound) and new (projection-based) models.
+    
+    New model (preferred):
+    - No certification_id
+    - Stores projected_cpe (dict of cert -> {min, max})
+    - Stores awarded_cpe (dict of cert -> amount, initially empty)
+    - User updates awarded_cpe after authority approval
+    
+    Old model (legacy):
+    - Has certification_id
+    - Has cpe_points (direct value)
+    - Used for backward compatibility
+    
     Returns the new activity id.
     """
-    # normalize cpe_points
-    try:
-        cpe = float(data.get('cpe_points') or data.get('cpe_value') or 0)
-    except Exception:
-        cpe = 0.0
-    data['cpe_points'] = cpe
-
     # timestamp
     data['created_at'] = datetime.utcnow()
 
     # create document with generated id
     ref = db.collection("users").document(uid).collection("activities").document()
     data_to_store = dict(data)
-    # include id in document (helps your client-side lists that look for 'id')
     data_to_store.setdefault('id', ref.id)
 
-    # CPE metadata defaults
+    # Handle new projection-based model
+    if 'projected_cpe' in data:
+        # New activity-centric model
+        data_to_store.setdefault('projected_cpe', data.get('projected_cpe') or {})
+        data_to_store.setdefault('awarded_cpe', data.get('awarded_cpe') or {})
+        # Don't auto-set cpe_points; it will be derived from awarded_cpe when needed
+        cpe_total = 0.0
+    else:
+        # Legacy certification-bound model
+        try:
+            cpe = float(data.get('cpe_points') or data.get('cpe_value') or 0)
+        except Exception:
+            cpe = 0.0
+        data_to_store['cpe_points'] = cpe
+        cpe_total = cpe
+    
+    # Common metadata
     data_to_store.setdefault('activity_type', data.get('activity_type') or 'unknown')
     data_to_store.setdefault('duration_hours', float(data.get('duration_hours')) if data.get('duration_hours') is not None else None)
+    data_to_store.setdefault('status', data.get('status') or 'pending')
+    data_to_store.setdefault('submitted_at', data.get('submitted_at') or datetime.utcnow())
+    
+    # Legacy fields (may not be present in new model)
     data_to_store.setdefault('submission_source', data.get('submission_source') or 'internal')
     data_to_store.setdefault('subcategory', data.get('subcategory'))
-    # proof_file handled by routes as 'proof_file'
-    data_to_store.setdefault('status', data.get('status') or 'pending')
-    data_to_store.setdefault('awarded_cpe', data.get('awarded_cpe'))
     data_to_store.setdefault('awarded_reason', data.get('awarded_reason'))
     data_to_store.setdefault('awarded_by', data.get('awarded_by'))
     data_to_store.setdefault('offsec_submission_id', data.get('offsec_submission_id'))
-    data_to_store.setdefault('submitted_at', data.get('submitted_at') or datetime.utcnow())
 
     ref.set(data_to_store)
 
-    # increment user's credits atomically; fallback to full recalculation if update fails
-    user_ref = db.collection('users').document(uid)
-    try:
-        user_ref.update({'credits': firestore.Increment(cpe)})
-    except Exception:
-        # fallback to full recalc if something prevents increment
-        _recalc_user_credits(uid)
-
-    # if linked to a certificate, recalc that certificate totals
+    # Update user credits only if award points are being awarded
+    if cpe_total > 0:
+        user_ref = db.collection('users').document(uid)
+        try:
+            user_ref.update({'credits': firestore.Increment(cpe_total)})
+        except Exception:
+            _recalc_user_credits(uid)
+    
+    # For legacy model: if linked to a certificate, recalc that certificate totals
     cert_id = data.get('certification_id')
+    if cert_id:
+        _recalculate_certificate_earned_cpes(uid, cert_id)
+
+    return ref.id
     if cert_id:
         _recalculate_certificate_earned_cpes(uid, cert_id)
 

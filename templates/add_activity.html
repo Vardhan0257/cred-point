@@ -1,73 +1,100 @@
 {% extends 'base.html' %}
 
-{% block title %}Log CPE Activity - CPE Management Platform{% endblock %}
+{% block title %}Log Activity - CRED-Point{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-lg-8">
-        <div class="card border-0 shadow">
-            <div class="card-header">
-                <h3 class="card-title mb-0">
-                    <i class="fas fa-plus text-success me-2"></i>Log New CPE Activity
+    <div class="col-lg-7">
+        <div class="card">
+            <!-- Header -->
+            <div class="card-header border-0">
+                <h3 class="mb-0 fw-semibold">
+                    <i class="fas fa-plus me-2"></i>Log New Activity
                 </h3>
+                <small class="text-muted d-block mt-2">
+                    Document your professional development. You'll enter final CPE after authority approval.
+                </small>
             </div>
 
+            <!-- Body -->
             <div class="card-body p-4">
-                <form method="POST" enctype="multipart/form-data" action="{{ url_for('routes.add_activity') }}">
-    {{ form.hidden_tag() }}
+                <form method="POST" enctype="multipart/form-data" action="{{ url_for('routes.add_activity') }}" id="activityForm">
+                    {{ form.hidden_tag() }}
 
-    <div class="form-group mb-3">
-        {{ form.title.label(class="form-label") }}
-        {{ form.title(class="form-control", placeholder="Enter activity title") }}
-    </div>
+                    <!-- Title -->
+                    <div class="form-group mb-3">
+                        {{ form.title.label(class="form-label fw-500") }}
+                        {{ form.title(class="form-control", placeholder="e.g., SANS SEC401 Course") }}
+                        {% if form.title.errors %}
+                            <small class="text-danger d-block mt-1">{{ form.title.errors[0] }}</small>
+                        {% endif %}
+                    </div>
 
-    <div class="form-group mb-3">
-        {{ form.provider.label(class="form-label") }}
-        {{ form.provider(class="form-control", placeholder="Provider / Organizer") }}
-    </div>
+                    <!-- Provider -->
+                    <div class="form-group mb-3">
+                        {{ form.provider.label(class="form-label fw-500") }}
+                        {{ form.provider(class="form-control", placeholder="e.g., SANS Institute") }}
+                        {% if form.provider.errors %}
+                            <small class="text-danger d-block mt-1">{{ form.provider.errors[0] }}</small>
+                        {% endif %}
+                    </div>
 
-    <div class="row g-3 mb-3">
-        <div class="col-md-6">
-            <div class="form-group">
-                {{ form.activity_date.label(class="form-label") }}
-                {{ form.activity_date(id="activity_date", class="form-control") }}
-            </div>
-        </div>
-        <div class="col-md-6">
-            <div class="form-group">
-                {{ form.cpe_points.label(class="form-label") }}
-                {{ form.cpe_points(class="form-control", placeholder="CPE points") }}
-            </div>
-        </div>
-    </div>
+                    <!-- Activity Type -->
+                    <div class="form-group mb-3">
+                        {{ form.activity_type.label(class="form-label fw-500") }}
+                        {{ form.activity_type(class="form-control activity-type-select") }}
+                        {% if form.activity_type.errors %}
+                            <small class="text-danger d-block mt-1">{{ form.activity_type.errors[0] }}</small>
+                        {% endif %}
+                    </div>
 
-    <div class="form-group mb-3">
-        {{ form.activity_type.label(class="form-label") }}
-        {{ form.activity_type(class="form-control") }}
-    </div>
+                    <!-- Activity Date -->
+                    <div class="form-group mb-3">
+                        {{ form.activity_date.label(class="form-label fw-500") }}
+                        {{ form.activity_date(id="activity_date", class="form-control") }}
+                        {% if form.activity_date.errors %}
+                            <small class="text-danger d-block mt-1">{{ form.activity_date.errors[0] }}</small>
+                        {% endif %}
+                    </div>
 
-    <div class="form-group mb-3">
-        {{ form.certification_id.label(class="form-label") }}
-        {{ form.certification_id(class="form-control") }}
-    </div>
+                    <!-- Eligible Certifications & Estimated CPE -->
+                    <div class="form-group mb-3">
+                        <label class="form-label fw-500">Eligible Certifications & Estimated CPE</label>
+                        <div id="projection_box" class="border rounded p-3 bg-light" style="min-height: 60px; display: flex; align-items: center;">
+                            <span class="text-muted">Select an activity type to see eligible certifications.</span>
+                        </div>
+                        <small class="d-block text-muted mt-2">
+                            <i class="fas fa-info-circle"></i> Estimated eligible CPE range based on certification rules. Final awarded CPE must be entered after authority approval.
+                        </small>
+                    </div>
 
-    <div class="form-group mb-3">
-        {{ form.description.label(class="form-label") }}
-        {{ form.description(class="form-control", rows=4, placeholder="Describe the activity") }}
-    </div>
+                    <!-- Description -->
+                    <div class="form-group mb-3">
+                        {{ form.description.label(class="form-label fw-500") }}
+                        {{ form.description(class="form-control", rows=4, placeholder="What did you learn? Key topics, skills, concepts covered...") }}
+                        {% if form.description.errors %}
+                            <small class="text-danger d-block mt-1">{{ form.description.errors[0] }}</small>
+                        {% endif %}
+                    </div>
 
-    <div class="form-group mb-3">
-        {{ form.proof_file.label(class="form-label") }}
-        {{ form.proof_file(class="form-control") }}
-    </div>
+                    <!-- Proof File -->
+                    <div class="form-group mb-4">
+                        {{ form.proof_file.label(class="form-label fw-500") }}
+                        {{ form.proof_file(class="form-control") }}
+                        <small class="d-block text-muted mt-2">PDF, PNG, JPG (max 10MB). Optional: certificate of completion or attendance confirmation.</small>
+                        {% if form.proof_file.errors %}
+                            <small class="text-danger d-block mt-1">{{ form.proof_file.errors[0] }}</small>
+                        {% endif %}
+                    </div>
 
-    <div class="d-flex justify-content-between">
-        <button type="submit" class="btn btn-success">
-            <i class="fas fa-check me-2"></i>Save Activity
-        </button>
-        <a href="{{ url_for('routes.list_activities') }}" class="btn btn-outline-secondary">Cancel</a>
-    </div>
-</form>
+                    <!-- Buttons -->
+                    <div class="d-flex gap-2 justify-content-between pt-3 border-top">
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-check me-2"></i>Log Activity
+                        </button>
+                        <a href="{{ url_for('routes.list_activities') }}" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -77,11 +104,51 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const activityTypeSelect = document.querySelector(".activity-type-select");
+    const projectionBox = document.getElementById("projection_box");
     const activityDate = document.getElementById("activity_date");
+
+    // Set default date to today
     if (activityDate && !activityDate.value) {
         const today = new Date().toISOString().split("T")[0];
         activityDate.value = today;
     }
+
+    // Load projections ONLY when activity type changes (not on page load)
+    activityTypeSelect.addEventListener("change", function () {
+        const actType = this.value;
+
+        if (!actType) {
+            projectionBox.innerHTML = '<span class="text-muted">Select an activity type to see eligible certifications.</span>';
+            return;
+        }
+
+        // Fetch projections for all user certifications
+        fetch(`/api/activity-projection?activity_type=${encodeURIComponent(actType)}`)
+            .then(res => res.json())
+            .then(data => {
+                const ranges = data.ranges || [];
+
+                if (ranges.length === 0) {
+                    projectionBox.innerHTML = '<span class="text-muted">No eligible certifications found for this activity type.</span>';
+                    return;
+                }
+
+                // Render as badges
+                let html = '<div style="display: flex; flex-wrap: wrap; gap: 10px;">';
+                ranges.forEach(item => {
+                    html += `<span class="badge bg-secondary">${item.cert} — ${item.min}–${item.max} CPE</span>`;
+                });
+                html += '</div>';
+
+                projectionBox.innerHTML = html;
+            })
+            .catch(err => {
+                console.error('Error loading projections:', err);
+                projectionBox.innerHTML = '<span class="text-danger">Error loading projections.</span>';
+            });
+    });
 });
 </script>
 {% endblock %}
+

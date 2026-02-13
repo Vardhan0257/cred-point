@@ -2,7 +2,7 @@
 
 document.addEventListener('DOMContentLoaded', function() {
     // Prevent double submissions
-    const forms = document.querySelectorAll('form');
+    const forms = document.querySelectorAll('form:not([data-no-mainjs])');
     forms.forEach(function(form) {
         form.addEventListener('submit', function(e) {
             const submitBtn = form.querySelector('button[type="submit"]');

@@ -24,32 +24,24 @@ class LoginForm(FlaskForm):
 # ACTIVITY FORM
 # =====================
 class ActivityForm(FlaskForm):
-    # ...existing code...
+    """
+    Activity form for CPE projection system.
+    User logs activity independently of certifications.
+    CPE projection calculated server-side per user certification.
+    """
     title = StringField("Title", validators=[DataRequired(), Length(min=2, max=200)])
     provider = StringField("Provider", validators=[DataRequired(), Length(min=2, max=100)])
-    # Optional: allow system to compute CPE based on type/duration
-    cpe_points = FloatField("CPE Points", validators=[Optional()])
-    # Fields required by add_activity.html
-    activity_type = SelectField("Activity Type", choices=[
-        ('course', 'Course'),
-        ('conference', 'Conference'),
-        ('webinar', 'Webinar'),
-        ('self_study', 'Self-Study'),
-        ('public_speaking', 'Public Speaking'),
-        ('published_paper', 'Published Paper'),
-        ('lab_submission', 'Lab Submission'),
-        ('teaching', 'Teaching'),
-        ('certification', 'Certification')
-    ], validators=[DataRequired()])
-    certification_id = SelectField("Certification", choices=[], validators=[Optional()])
-    # Additional metadata to grade CPEs
-    duration_hours = FloatField("Duration (hours)", validators=[Optional()])
-    submission_source = SelectField("Submission Source", choices=[('internal','Internal'), ('offsec','OffSec'), ('external','External')], validators=[Optional()])
-    subcategory = StringField("Subcategory", validators=[Optional(), Length(max=100)])
-    description = TextAreaField("Description", validators=[DataRequired()])
-    activity_date = DateField("Activity Date", format='%Y-%m-%d', validators=[DataRequired()],widget=DateInput())
-    proof_file = FileField("Proof File", validators=[FileAllowed(['pdf', 'png', 'jpg', 'jpeg'], 'Allowed formats: PDF, PNG, JPG.')])  
-    submit = SubmitField("Add Activity")
+    
+    # Core activity data (required)
+    activity_type = SelectField("Activity Type", choices=[], validators=[DataRequired()])
+    
+    activity_date = DateField("Activity Date", format='%Y-%m-%d', validators=[DataRequired()], widget=DateInput())
+    
+    description = TextAreaField("Description", validators=[DataRequired(), Length(min=10, max=1000)])
+    
+    proof_file = FileField("Proof File", validators=[FileAllowed(['pdf', 'png', 'jpg', 'jpeg'], 'Allowed formats: PDF, PNG, JPG.')])
+    
+    submit = SubmitField("Log Activity")
 
 # =====================
 # CERTIFICATE FORM
@@ -60,10 +52,13 @@ class CertificateForm(FlaskForm):
         ("ISC2", "ISC²"),
         ("EC-Council", "EC-Council"),
         ("CompTIA", "CompTIA"),
+        ("ISACA", "ISACA"),
+        ("GIAC", "GIAC"),
         ("OffSec", "OffSec")
     ], validators=[DataRequired()])
+    issue_date = StringField("Issue Date")
+    renewal_date = StringField("Renewal Date")
     required_cpes = IntegerField("Required CPEs", validators=[DataRequired()])
-    renewal_date = DateField("Renewal Date", format='%Y-%m-%d', validators=[DataRequired()])
     submit = SubmitField("Add Certificate")
 
 # =====================

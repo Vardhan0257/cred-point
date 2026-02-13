@@ -1,98 +1,159 @@
 {% extends 'base.html' %}
-
-{% block title %}Login - CPE Management Platform{% endblock %}
+{% block title %}Login - CredPoint{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-6 col-lg-4">
-        <div class="card border-0 shadow">
-            <div class="card-body p-5">
-                <div class="text-center mb-4">
-                    <i class="fas fa-sign-in-alt fa-3x text-primary mb-3"></i>
-                    <h2 class="card-title">Sign In</h2>
-                    <p class="text-muted">Access your CPE management dashboard</p>
-                </div>
 
-                <form id="firebase-login-form">
-                    <div id="login-error" class="alert alert-danger d-none" role="alert"></div>
+<div class="login-wrapper">
 
-                    <div class="mb-3">
-                        <label for="email" class="form-label">Email</label>
-                        <input type="email" id="email" class="form-control" required>
-                    </div>
+<div class="login-card">
 
-                    <div class="mb-4">
-                        <label for="password" class="form-label">Password</label>
-                        <input type="password" id="password" class="form-control" required>
-                    </div>
-
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-primary btn-lg">
-                            <i class="fas fa-sign-in-alt me-2"></i>Sign In
-                        </button>
-                    </div>
-                </form>
-
-                <hr class="my-4">
-                <div class="text-center">
-                    <p class="mb-0">Don't have an account?</p>
-                    <a href="{{ url_for('routes.register_page') }}" class="btn btn-outline-secondary">
-                        <i class="fas fa-user-plus me-2"></i>Create Account
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
+<div class="login-header">
+<h2>Sign in to CredPoint</h2>
+<p>Manage certifications and track your CPE progress</p>
 </div>
-{% endblock %}
 
+<form id="firebase-login-form" data-no-mainjs="true">
+
+<div id="login-error" class="alert alert-danger d-none"></div>
+
+<div class="mb-3">
+<label class="form-label">Email</label>
+<input type="email" id="email" class="form-control" required>
+</div>
+
+<div class="mb-4">
+<label class="form-label">Password</label>
+<input type="password" id="password" class="form-control" required>
+</div>
+
+<button id="login-btn" type="submit" class="btn btn-primary w-100">
+Sign In
+</button>
+
+</form>
+
+<div class="login-footer">
+<span>New here?</span>
+<a href="{{ url_for('routes.register_page') }}">Create account</a>
+</div>
+
+</div>
+</div>
+
+<style>
+.login-wrapper{
+min-height:80vh;
+display:flex;
+align-items:center;
+justify-content:center;
+}
+
+.login-card{
+width:100%;
+max-width:420px;
+background:#11161c;
+border:1px solid #1f242c;
+border-radius:16px;
+padding:40px;
+box-shadow:0 20px 60px rgba(0,0,0,0.4);
+}
+
+.login-header{
+text-align:center;
+margin-bottom:28px;
+}
+
+.login-header h2{
+font-weight:700;
+margin-bottom:6px;
+}
+
+.login-header p{
+color:#9aa3b2;
+font-size:14px;
+}
+
+.login-footer{
+margin-top:24px;
+text-align:center;
+color:#9aa3b2;
+font-size:14px;
+}
+
+.login-footer a{
+color:#fff;
+text-decoration:none;
+margin-left:6px;
+}
+</style>
+
+{% endblock %}
 {% block scripts %}
+
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+
 <script>
+window.addEventListener("load", function () {
+
+    console.log("Login script active");
+
     const firebaseConfig = {
         apiKey: "{{ firebase_config.apiKey }}",
         authDomain: "{{ firebase_config.authDomain }}",
         projectId: "{{ firebase_config.projectId }}"
     };
-    firebase.initializeApp(firebaseConfig);
 
-    document.getElementById('firebase-login-form').addEventListener('submit', async function (e) {
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
+
+    const form = document.getElementById('firebase-login-form');
+
+    if (!form) {
+        console.error("Form not found");
+        return;
+    }
+
+    form.addEventListener('submit', async function (e) {
         e.preventDefault();
+
+        console.log("Submitting login...");
+
         const email = document.getElementById('email').value;
         const password = document.getElementById('password').value;
 
         try {
-            const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
+            const userCredential =
+                await firebase.auth().signInWithEmailAndPassword(email, password);
+
             const token = await userCredential.user.getIdToken();
 
             const response = await fetch('/session-login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ idToken: token })
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body:JSON.stringify({ idToken: token })
             });
 
-            if (response.ok) {
-                window.location.href = '/dashboard';
+            if(response.ok){
+                window.location.href='/dashboard';
             } else {
-                const data = await response.json();
-                showError(data.error || 'Login failed');
+                showError("Session login failed");
             }
-        } catch (error) {
-            showError(error.message);
+
+        } catch(err){
+            console.error(err);
+            showError(err.message);
         }
     });
 
-    function showError(message) {
-        const errorDiv = document.getElementById('login-error');
-        if (errorDiv) {
-            errorDiv.textContent = message;
-            errorDiv.classList.remove('d-none');
-        } else {
-            alert(message); // fallback
-        }
+    function showError(msg){
+        const el=document.getElementById('login-error');
+        el.textContent=msg;
+        el.classList.remove('d-none');
     }
+
+});
 </script>
+
 {% endblock %}

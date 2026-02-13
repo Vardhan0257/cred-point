@@ -17,100 +17,256 @@
                 <form method="POST">
                     {{ form.hidden_tag() }}
                     
-                    <div class="mb-3">
+                    <!-- NAME -->
+                    <div class="mb-3 position-relative">
                         {{ form.name.label(class="form-label") }}
-                        {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else ""), placeholder="e.g., CISSP, CEH, Security+") }}
-                        {% if form.name.errors %}
-                            <div class="invalid-feedback">
-                                {% for error in form.name.errors %}
-                                    {{ error }}
-                                {% endfor %}
-                            </div>
-                        {% endif %}
+                        {{ form.name(class="form-control", id="cert-name", placeholder="e.g., CISSP, CEH, Security+") }}
+                        <div id="cert-dropdown" style="display:none;position:absolute;z-index:999;width:100%;background:#111;border:1px solid #333;"></div>
                         <div class="form-text">Enter the full name of your certification</div>
                     </div>
-                    
+
+                    <!-- AUTHORITY -->
                     <div class="mb-3">
                         {{ form.authority.label(class="form-label") }}
-                        {{ form.authority(class="form-select" + (" is-invalid" if form.authority.errors else "")) }}
-                        {% if form.authority.errors %}
-                            <div class="invalid-feedback">
-                                {% for error in form.authority.errors %}
-                                    {{ error }}
-                                {% endfor %}
-                            </div>
-                        {% endif %}
+                        {{ form.authority(class="form-select", id="cert-authority") }}
                         <div class="form-text">Select the certification authority</div>
                     </div>
-                    
+
+                    <!-- CPE -->
                     <div class="mb-3">
                         {{ form.required_cpes.label(class="form-label") }}
                         <div class="input-group">
-                            {{ form.required_cpes(class="form-control" + (" is-invalid" if form.required_cpes.errors else ""), placeholder="40") }}
+                            {{ form.required_cpes(class="form-control", id="cert-cpe") }}
                             <span class="input-group-text">CPEs</span>
                         </div>
-                        {% if form.required_cpes.errors %}
-                            <div class="invalid-feedback">
-                                {% for error in form.required_cpes.errors %}
-                                    {{ error }}
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                        <div class="form-text">Total CPEs needed for renewal period</div>
                     </div>
-                    
+
+                    <!-- ISSUE DATE -->
+                    <div class="mb-3">
+                        <label class="form-label">Issue Date</label>
+                        <input
+                            id="issue-date"
+                            name="issue_date"
+                            class="form-control"
+                            placeholder="DD/MM/YYYY"
+                            autocomplete="off"
+                        >
+                        <div class="form-text">When was this certification issued?</div>
+                        <div class="invalid-feedback">
+                            Please enter date in DD/MM/YYYY format
+                        </div>
+                    </div>
+
+                    <!-- RENEWAL DATE -->
                     <div class="mb-4">
-                        {{ form.renewal_date.label(class="form-label") }}
-                        {{ form.renewal_date(class="form-control" + (" is-invalid" if form.renewal_date.errors else "")) }}
-                        {% if form.renewal_date.errors %}
-                            <div class="invalid-feedback">
-                                {% for error in form.renewal_date.errors %}
-                                    {{ error }}
-                                {% endfor %}
-                            </div>
-                        {% endif %}
-                        <div class="form-text">When does this certification need to be renewed?</div>
+                        <input type="hidden" id="renewal-hidden" name="renewal_date">
+                        <label class="form-label">Renewal Date</label>
+                        <input id="renewal-display" class="form-control" readonly>
+                        <div id="renewal-status" class="form-text mt-2"></div>
                     </div>
-                    
+
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                         <a href="{{ url_for('routes.list_certificates') }}" class="btn btn-secondary me-md-2">
-                            <i class="fas fa-times me-1"></i>Cancel
+                            Cancel
                         </a>
-                        <button type="submit" class="btn btn-primary" data-original="{{ 'Update' if certification else 'Add' }} Certification">
-                            <i class="fas fa-{{ 'save' if certification else 'plus' }} me-1"></i>
+                        <button type="submit" class="btn btn-primary">
                             {{ 'Update' if certification else 'Add' }} Certification
                         </button>
                     </div>
                 </form>
             </div>
         </div>
-        
-        <!-- Information Card -->
-        <div class="card border-0 mt-4">
-            <div class="card-body">
-                <h6 class="card-title">
-                    <i class="fas fa-info-circle text-info me-2"></i>Common CPE Requirements
-                </h6>
-                <div class="row text-center">
-                    <div class="col-6 col-md-3 mb-2">
-                        <strong>ISC²</strong><br>
-                        <small class="text-muted">40 CPEs / 3 years</small>
-                    </div>
-                    <div class="col-6 col-md-3 mb-2">
-                        <strong>EC-Council</strong><br>
-                        <small class="text-muted">120 Credits / 3 years</small>
-                    </div>
-                    <div class="col-6 col-md-3 mb-2">
-                        <strong>CompTIA</strong><br>
-                        <small class="text-muted">50 CEUs / 3 years</small>
-                    </div>
-                    <div class="col-6 col-md-3 mb-2">
-                        <strong>OffSec</strong><br>
-                        <small class="text-muted">Varies by cert</small>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+
+const nameInput = document.getElementById("cert-name");
+const authorityInput = document.getElementById("cert-authority");
+const cpeInput = document.getElementById("cert-cpe");
+const dropdown = document.getElementById("cert-dropdown");
+
+const issueDate = document.getElementById("issue-date");
+/* ================= INPUT MASK + AUTO LIMIT ================= */
+issueDate.addEventListener("input", () => {
+
+    // keep only numbers
+    let raw = issueDate.value.replace(/[^\d]/g, "").substring(0,8);
+
+    let day = raw.substring(0,2);
+    let month = raw.substring(2,4);
+    let year = raw.substring(4,8);
+
+    // ---- LIMIT DAY (01–31) ----
+    if(day.length === 2){
+        let d = parseInt(day,10);
+        if(d === 0) day = "01";
+        if(d > 31) day = "31";
+    }
+
+    // ---- LIMIT MONTH (01–12) ----
+    if(month.length === 2){
+        let m = parseInt(month,10);
+        if(m === 0) month = "01";
+        if(m > 12) month = "12";
+    }
+
+    // rebuild formatted value
+    let formatted = "";
+
+    if(day) formatted += day;
+    if(raw.length >= 3) formatted += "/" + month;
+    if(raw.length >= 5) formatted += "/" + year;
+
+    issueDate.value = formatted;
+});
+const renewalDisplay = document.getElementById("renewal-display");
+const renewalHidden = document.getElementById("renewal-hidden");
+const renewalStatus = document.getElementById("renewal-status");
+
+let renewalYears = 3;
+
+authorityInput.value = "";
+cpeInput.value = "";
+
+/* ================= CERT SEARCH ================= */
+nameInput.addEventListener("input", async () => {
+
+    const val = nameInput.value.trim().toLowerCase();
+
+    authorityInput.value = "";
+    cpeInput.value = "";
+
+    if(val.length < 2){
+        dropdown.style.display="none";
+        return;
+    }
+
+    const res = await fetch(`/api/cert-search?q=${encodeURIComponent(val)}`);
+    const list = await res.json();
+
+    dropdown.innerHTML="";
+    if(!list.length){
+        dropdown.style.display="none";
+        return;
+    }
+
+    list.forEach(cert=>{
+        const div=document.createElement("div");
+        div.textContent=cert;
+        div.style.padding="8px";
+        div.style.cursor="pointer";
+
+        div.onclick=()=>{
+            nameInput.value=cert;
+            dropdown.style.display="none";
+            autofill(cert);
+        };
+
+        dropdown.appendChild(div);
+    });
+
+    dropdown.style.display="block";
+});
+
+document.addEventListener("click",(e)=>{
+    if(!nameInput.contains(e.target) && !dropdown.contains(e.target)){
+        dropdown.style.display="none";
+    }
+});
+
+/* ================= AUTOFILL ================= */
+async function autofill(cert){
+    const r = await fetch(`/api/cert-autofill?name=${cert.toLowerCase()}`);
+    const data = await r.json();
+
+    if(!data.found) return;
+
+    authorityInput.value = data.authority;
+    cpeInput.value = data.required_cpes;
+    renewalYears = data.renewal_years || 3;
+}
+
+/* ================= DATE VALIDATION ================= */
+function isValidDateDDMMYYYY(value) {
+    const regex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+    const match = value.match(regex);
+    if (!match) return false;
+
+    const day = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10);
+    const year = parseInt(match[3], 10);
+
+    if (month < 1 || month > 12) return false;
+    if (day < 1 || day > 31) return false;
+
+    const test = new Date(year, month - 1, day);
+    return (
+        test.getFullYear() === year &&
+        test.getMonth() === month - 1 &&
+        test.getDate() === day
+    );
+}
+
+/* ================= DATE ENGINE ================= */
+function calcRenewalFromText(dateStr) {
+    const [dd, mm, yyyy] = dateStr.split("/").map(Number);
+    const d = new Date(yyyy, mm - 1, dd);
+
+    d.setFullYear(d.getFullYear() + renewalYears);
+
+    const rdd = String(d.getDate()).padStart(2, '0');
+    const rmm = String(d.getMonth() + 1).padStart(2, '0');
+    const ryyyy = d.getFullYear();
+
+    renewalDisplay.value = `${rdd}/${rmm}/${ryyyy}`;
+    renewalHidden.value = `${ryyyy}-${rmm}-${rdd}`;
+
+    updateCountdown(d);
+}
+
+function updateCountdown(expiry){
+    const now = new Date();
+    const diff = expiry-now;
+
+    if(diff<=0){
+        renewalStatus.textContent="Expired";
+        return;
+    }
+
+    const days=Math.floor(diff/(1000*60*60*24));
+    const years=Math.floor(days/365);
+    const months=Math.floor((days%365)/30);
+
+    if(days<60){
+        renewalStatus.textContent=`⚠ Expires soon (${days} days left)`;
+    }else{
+        renewalStatus.textContent=`Expires in ${years}y ${months}m`;
+    }
+}
+
+/* ================= ISSUE DATE VALIDATION ================= */
+issueDate.addEventListener("blur", () => {
+    if (!issueDate.value) return;
+
+    if (!isValidDateDDMMYYYY(issueDate.value)) {
+        issueDate.classList.add("is-invalid");
+    } else {
+        issueDate.classList.remove("is-invalid");
+        calcRenewalFromText(issueDate.value);
+    }
+});
+
+/* ================= FORM SUBMISSION GUARD ================= */
+document.querySelector("form").addEventListener("submit", (e) => {
+    if (!isValidDateDDMMYYYY(issueDate.value)) {
+        issueDate.classList.add("is-invalid");
+        e.preventDefault();
+    }
+});
+
+});
+</script>
+
 {% endblock %}
